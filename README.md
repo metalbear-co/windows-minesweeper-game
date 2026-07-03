@@ -11,7 +11,7 @@ deploy/
   k8s/         Kubernetes manifests (Linux, namespace "minesweeper")
   .mirrord/    mirrord config for local dev against the cluster
 .github/
-  workflows/   CI/CD: deploy.yml (push to main) + preview.yml (per-PR mirrord preview)
+  workflows/   CI/CD: deploy.yml (build + deploy on push to main)
 ```
 
 Deployment, CI/CD, and cluster-access setup live in **[`deploy/README.md`](deploy/README.md)**.

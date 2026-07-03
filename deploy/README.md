@@ -16,7 +16,7 @@ Whoever has admin access to the Playground cluster runs these, in order. No app 
 1. **Bootstrap the namespace, RBAC, and Redis** — the "One-time bootstrap" block below.
 2. **Create the app secrets** (`minesweeper-secrets`) — also in that block.
 3. **Mint `KUBECONFIG_DATA`** from the `minesweeper-deployer` ServiceAccount — see "Building KUBECONFIG_DATA".
-4. **Add the GitHub secrets** (`KUBECONFIG_DATA`, `MIRRORD_OPERATOR_LICENSE`) — "GitHub secrets" section.
+4. **Add the GitHub secret** (`KUBECONFIG_DATA`) — "GitHub secrets" section.
 5. Push to `main` → `deploy.yml` builds, deploys, and verifies the rollout automatically.
 
 That's the whole change: **no code edits, just the bootstrap commands + two GitHub secrets.** The CI already
@@ -45,8 +45,7 @@ kubectl apply -f deploy/k8s/ingress.yaml
 
 | Secret | What | Used by |
 |--------|------|---------|
-| `KUBECONFIG_DATA` | base64 of a kubeconfig authenticating as the `minesweeper-deployer` ServiceAccount (see below) | deploy + preview |
-| `MIRRORD_OPERATOR_LICENSE` | Enterprise operator license key | preview |
+| `KUBECONFIG_DATA` | base64 of a kubeconfig authenticating as the `minesweeper-deployer` ServiceAccount (see below) | deploy |
 
 `GITHUB_TOKEN` (GHCR push) is automatic — no setup.
 
@@ -80,9 +79,3 @@ This token can only `get`/`patch` deployments in `minesweeper` — it cannot tou
 ## How CI/CD works
 
 - **Push to `main`** → `deploy.yml`: test → build+push `:sha-<gitsha>` → `kubectl set image` → `rollout status`. Automatic, no manual step.
-- **Open/update a PR** → `preview.yml`: build+push `:pr-<n>` → `mirrord-preview start` (isolated pod running only the changed server, keyed `pr-<n>`, sharing the real Redis). Reviewers test the preview link — nothing lands in the baseline.
-- **Close/merge a PR** → `preview.yml`: `mirrord-preview stop`. TTL is the backstop.
-
-## Prereqs (mirrord preview)
-
-Operator ≥ 3.142.0, CLI ≥ 3.189.0, Enterprise plan, Helm `operator.previewEnv: true`.
