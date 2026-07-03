@@ -79,3 +79,34 @@ This token can only `get`/`patch` deployments in `minesweeper` — it cannot tou
 ## How CI/CD works
 
 - **Push to `main`** → `deploy.yml`: test → build+push `:sha-<gitsha>` → `kubectl set image` → `rollout status`. Automatic, no manual step.
+
+## Resource sizing & instance recommendations
+
+Target: leaderboards up to ~500 entries each (3 difficulties, so ~1,500 rows total) and 50 to 100 concurrent players. This is a **small** workload, the current manifest values already cover it.
+
+### Data footprint (Redis / PVC)
+
+- ~1,500 sorted-set members. Each is `{claimToken}:{handle}` (~105 bytes) plus score and sorted-set overhead, roughly 200 bytes/entry, so **~300 KB of leaderboard data**.
+- Transient keys (per-game hashes with a 24h TTL, rate-limit counters, claim records) add a few MB even on a busy day. AOF is compacted on rewrite.
+- **Total stays well under 100 MB.** The **1Gi PVC is ample** (10x+ headroom), no need to grow it. Redis `maxmemory` isn't a concern at this scale.
+
+### Compute / memory
+
+Gameplay is client-side, the server is only hit on `POST /game/start` and `POST /game/submit`, so request rate is low (single-digit req/s at 50–100 concurrent). The heaviest op is replay verification on submit (an Expert board flood-fill, sub-millisecond).
+
+| Component | Requests | Limits | Replicas | Notes |
+|-----------|----------|--------|----------|-------|
+| minesweeper-server | 256Mi / 100m | 512Mi / 500m | 1 | Current values, comfortable for 50–100 concurrent. |
+| redis | 128Mi / 50m | 256Mi / 250m | 1 | Single replica (single writer), do not scale horizontally. |
+
+The whole stack runs steady in **under ~1 GiB RAM and under ~0.5 vCPU**.
+
+### Instances
+
+- Fits on a **single small node**: AWS `t3.small`/`t3.medium` (2 vCPU / 2–4 GiB), GCP `e2-small`/`e2-medium`, or equivalent.
+- **No pre-provisioning needed.** Because pod requests are small, deploy onto a **cluster-autoscaler node pool** (nodes scale in/out with demand) or a **serverless-node platform** (GKE Autopilot, EKS Fargate), where you pay per pod request and there's nothing to size up front.
+
+### Elasticity (optional)
+
+- Add a **HorizontalPodAutoscaler** on `minesweeper-server` for burst headroom, e.g. min 2 / max 5 replicas targeting ~70% CPU. The server is stateless (all state is in Redis), so it scales cleanly.
+- **Do not autoscale Redis** (it's the single stateful writer). If Redis ever becomes a bottleneck at much larger scale, move to a managed Redis and point `REDIS_URL` at it, rather than adding replicas.
