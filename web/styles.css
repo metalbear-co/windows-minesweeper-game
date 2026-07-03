@@ -68,7 +68,8 @@ body{
 .hbtn.yellow:active{transform:translateY(2px); box-shadow:0 3px 0 rgba(0,0,0,.15)}
 .hbtn.ghost{background:rgba(255,255,255,.12); color:#fff; border:2px solid rgba(255,255,255,.5)}
 .hbtn.ghost:hover{border-color:#fff}
-.hbtn.white{background:#fff; color:var(--mb-navy)}
+.hbtn.white{background:#fff; color:var(--mb-navy); box-shadow:0 5px 0 rgba(0,0,0,.15)}
+.hbtn.white:active{transform:translateY(2px); box-shadow:0 3px 0 rgba(0,0,0,.15)}
 .hbtn.white b{font-weight:800}
 .hbtn.purple{background:var(--mb-purple); color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.15)}
 .hbtn.purple:active{transform:translateY(2px); box-shadow:0 3px 0 rgba(0,0,0,.15)}
