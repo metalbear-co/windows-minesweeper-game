@@ -1,0 +1,66 @@
+name: preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/metalbear-co/minesweeper-server
+  KEY: pr-${{ github.event.pull_request.number }}
+
+jobs:
+  # Build the PR image and start (or update) its isolated preview.
+  start:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push PR image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.KEY }}
+
+      - name: Start preview environment
+        uses: metalbear-co/mirrord-preview@main
+        with:
+          action: start
+          target: deployment/minesweeper-server
+          namespace: minesweeper
+          image: ${{ env.IMAGE }}:${{ env.KEY }}
+          key: ${{ env.KEY }}
+        env:
+          MIRRORD_OPERATOR_LICENSE: ${{ secrets.MIRRORD_OPERATOR_LICENSE }}
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
+
+  # Tear the preview down when the PR closes (merged or not).
+  stop:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stop preview environment
+        uses: metalbear-co/mirrord-preview@main
+        with:
+          action: stop
+          key: ${{ env.KEY }}
+        env:
+          MIRRORD_OPERATOR_LICENSE: ${{ secrets.MIRRORD_OPERATOR_LICENSE }}
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}

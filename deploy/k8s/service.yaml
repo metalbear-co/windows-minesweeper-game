@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minesweeper-server
+  namespace: minesweeper
+  labels:
+    app: minesweeper-server
+spec:
+  selector:
+    app: minesweeper-server
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3001
+      targetPort: 3001
+  type: ClusterIP

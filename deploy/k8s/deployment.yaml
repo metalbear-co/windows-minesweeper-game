@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minesweeper-server
+  namespace: minesweeper
+  labels:
+    app: minesweeper-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minesweeper-server
+  template:
+    metadata:
+      labels:
+        app: minesweeper-server
+    spec:
+      containers:
+        - name: minesweeper-server
+          image: ghcr.io/metalbear-co/minesweeper-server:latest
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: GAME_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: minesweeper-secrets
+                  key: game-secret
+            - name: SHARE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: minesweeper-secrets
+                  key: share-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

@@ -1,0 +1,49 @@
+# ServiceAccount the CD job authenticates as. RBAC is scoped to this namespace
+# and to exactly what `kubectl set image` + `kubectl rollout status` need --
+# nothing else in the cluster is reachable with this token.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minesweeper-deployer
+  namespace: minesweeper
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: minesweeper-deployer
+  namespace: minesweeper
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status"]
+    verbs: ["get"]
+  # rollout status watches the deployment's pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: minesweeper-deployer
+  namespace: minesweeper
+subjects:
+  - kind: ServiceAccount
+    name: minesweeper-deployer
+    namespace: minesweeper
+roleRef:
+  kind: Role
+  name: minesweeper-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Long-lived token for the SA (consumed by CI as a kubeconfig credential).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minesweeper-deployer-token
+  namespace: minesweeper
+  annotations:
+    kubernetes.io/service-account.name: minesweeper-deployer
+type: kubernetes.io/service-account-token

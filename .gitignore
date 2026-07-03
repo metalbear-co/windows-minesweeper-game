@@ -1,0 +1,13 @@
+# dependencies & build output
+node_modules/
+dist/
+
+# secrets (never commit cluster creds or app secrets)
+*.kubeconfig
+deployer.kubeconfig
+*.secret
+
+# local tooling
+.claude/
+.DS_Store
+*.log

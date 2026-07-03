@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MetalBear Minesweeper -- brought to you by mirrord on Windows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ===== HERO (launch-week look) ===== -->
+  <header class="hero">
+    <nav class="nav">
+      <a class="logo" href="https://metalbear.com/" target="_blank" rel="noopener"><img src="metalbear-logo.png" alt="MetalBear"></a>
+      <div class="navlinks">
+        <a href="https://metalbear.com/mirrord/" target="_blank" rel="noopener">mirrord ▾</a><a href="https://metalbear.com/mirrord/pricing/" target="_blank" rel="noopener">Pricing</a><a href="https://metalbear.com/mirrord/docs" target="_blank" rel="noopener">Docs</a><a href="https://metalbear.com/customers/" target="_blank" rel="noopener">Customers</a><a href="https://metalbear.com/blog/" target="_blank" rel="noopener">Blog</a><a href="https://metalbear.com/contact/" target="_blank" rel="noopener">Contact</a>
+      </div>
+      <div class="navright">
+        <a class="stars" href="https://github.com/metalbear-co/mirrord" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 012-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>5k stars</a>
+        <a class="signin" href="https://app.metalbear.com/" target="_blank" rel="noopener">Sign in</a>
+        <a class="tryfree" id="bannerCta">Try Free →</a>
+      </div>
+    </nav>
+
+    <div class="herobody">
+      <span class="badge light">★ mirrord Launch Week</span>
+      <h1>MetalBear <span class="accent">Minesweeper</span></h1>
+      <p>To celebrate <a class="accent-link" href="https://metalbear.com/launch-week/" target="_blank" rel="noopener">mirrord for Windows</a>,
+         we're running Minesweeper all week. Try your best, climb the leaderboard, and top it by Friday to win swag.</p>
+    </div>
+
+    <!-- wavy connector -->
+    <img class="wave" src="img/wave.png" alt="" aria-hidden="true">
+  </header>
+
+  <!-- ===== GAME (unchanged) ===== -->
+  <main class="stage">
+    <div class="win">
+      <div class="titlebar">
+        <div class="t"><span class="ico"><img src="metalbear-bear.png" alt=""></span><span>MetalBear Minesweeper.exe</span></div>
+        <div class="tbtns"><div class="tbtn">_</div><div class="tbtn">▢</div><div class="tbtn">✕</div></div>
+      </div>
+      <div class="menubar"><span><u>G</u>ame</span><span><u>H</u>elp</span><span style="margin-left:auto;opacity:.7">Sponsored by mirrord</span></div>
+
+      <div class="app">
+        <!-- GAME -->
+        <div class="gameframe">
+          <div class="hud">
+            <div class="led" id="mineCount">040</div>
+            <div class="smiley" id="smiley" title="New game">🙂</div>
+            <div class="led" id="timer">000</div>
+          </div>
+          <div class="board" id="board"></div>
+        </div>
+
+        <!-- SIDE PANEL -->
+        <div class="panel">
+          <div class="panelbox">
+            <h3>Difficulty</h3>
+            <div class="diftabs" id="diftabs">
+              <div class="diftab" data-d="beginner">Beginner</div>
+              <div class="diftab active" data-d="intermediate">Inter.</div>
+              <div class="diftab" data-d="expert">Expert</div>
+            </div>
+            <div class="small" id="difDesc">16x16 - 40 mines</div>
+            <div class="field">
+              <input id="handle" maxlength="14" placeholder="nickname (optional)">
+            </div>
+            <div class="small" style="margin-top:4px">No email needed to play. Mobile: tap = reveal, hold the <b>🚩 Flag</b> button to plant flags.</div>
+            <button class="btn" id="flagToggle" style="width:100%;margin-top:6px">🚩 Flag mode: OFF</button>
+          </div>
+
+          <div class="panelbox lbbox">
+            <h3>🏆 Best scores -- <span id="lbDif">Intermediate</span></h3>
+            <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="win prizes">
+      <div class="titlebar">
+        <div class="t"><span class="ico">🏆</span><span>How to win</span></div>
+        <div class="tbtns"><div class="tbtn">_</div><div class="tbtn">▢</div><div class="tbtn">✕</div></div>
+      </div>
+      <div class="prizes-body">
+        <span class="prizes-ico">🏆</span>
+        <div class="prizes-txt">
+          <p><b>The board stays live until Friday.</b> We're giving prizes for the highest score in
+             each category — <b>Beginner</b>, <b>Intermediate</b>, and <b>Expert</b>. Climb the leaderboard
+             and hold the top spot in your category to win. To claim your prize, share your high-score
+             image on LinkedIn and tag <b>MetalBear</b>, or post it in our Slack.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== LAUNCH WEEK HAPPENS IN SLACK ===== -->
+  <section class="slack">
+    <div class="slack-wrap">
+    <div class="slack-in">
+      <span class="eyebrow">👀 Happening now in Slack</span>
+      <h2>Launch week happens in <span class="accent">Slack</span></h2>
+      <p>Post your score on Slack or LinkedIn to enter the prize pool, ask the team anything during each drop,
+         and hear about tomorrow's launch first.</p>
+      <ul class="ticks">
+        <li><b>Launch Week Minesweeper</b> running all week. Top of the board wins our best swag.</li>
+        <li><b>First to know</b> when each drop lands (before Twitter, before LinkedIn).</li>
+        <li><b>Daily Q&amp;A with the team</b> at 9am PT during every drop.</li>
+      </ul>
+      <div class="slack-btns">
+        <a class="hbtn yellow" href="https://metalbear.co/slack" target="_blank" rel="noopener">Join us on Slack →</a>
+        <a class="hbtn purple" href="https://metalbear.com/launch-week/" target="_blank" rel="noopener">See the lineup →</a>
+      </div>
+    </div>
+    <img class="slack-art" src="img/slack-illustration.png" alt="Mirror mascot above a Minesweeper board">
+    </div>
+  </section>
+
+  <!-- ===== FINAL CTA (purple + clouds) ===== -->
+  <div class="cta-bg">
+    <footer class="cta">
+      <div class="cta-char peek-left" aria-hidden="true"><img src="cta-peek-left.svg" alt=""></div>
+      <div class="cta-char peek-top" aria-hidden="true"><img src="cta-peek-right.svg" alt=""></div>
+      <div class="cta-char peek-bottom" aria-hidden="true"><img src="cta-peek-right-bottom.svg" alt=""></div>
+      <div class="cta-in">
+        <span class="cta-label">Get started</span>
+        <h2 class="cta-headline">Try what we shipped <em>today.</em></h2>
+        <p class="cta-sub">Free to start. Works with your existing cluster. Up in under 15 seconds.</p>
+        <div class="cta-actions">
+          <a class="cta-primary" id="footCta">Try <b>Free! No Card Required</b></a>
+          <a class="cta-secondary" id="footInstall">Book a Demo</a>
+        </div>
+        <a class="cta-link" href="https://metalbear.com/mirrord/docs" target="_blank" rel="noopener">Read the docs →</a>
+      </div>
+    </footer>
+  </div>
+
+  <span id="taskclock" hidden></span>
+
+  <!-- RESULTS / CLAIM MODAL (unchanged) -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="titlebar"><div class="t"><span class="ico" id="modalIco">🏆</span><span id="modalTitle">You cleared the board!</span></div>
+        <div class="tbtns"><div class="tbtn" id="modalClose">✕</div></div></div>
+      <div class="body" id="modalBody"></div>
+    </div>
+  </div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>

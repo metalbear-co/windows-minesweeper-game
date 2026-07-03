@@ -1,0 +1,23 @@
+{
+  "target": {
+    "path": "deployment/minesweeper-server",
+    "namespace": "minesweeper"
+  },
+  "feature": {
+    "network": {
+      "incoming": {
+        "mode": "steal"
+      },
+      "outgoing": {
+        "tcp": true,
+        "udp": true
+      }
+    },
+    "env": {
+      "override": {}
+    },
+    "fs": {
+      "mode": "local"
+    }
+  }
+}
