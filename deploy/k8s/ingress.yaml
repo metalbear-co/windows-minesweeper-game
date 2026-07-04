@@ -10,10 +10,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - minesweeper.metalbear.co
+        - minesweeper.metalbear.com
       secretName: minesweeper-tls
   rules:
-    - host: minesweeper.metalbear.co
+    - host: minesweeper.metalbear.com
       http:
         paths:
           # Server serves both the static UI (/) and the API on the same origin.

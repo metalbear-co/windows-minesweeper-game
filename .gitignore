@@ -3,8 +3,7 @@ node_modules/
 dist/
 
 # secrets (never commit cluster creds or app secrets)
-*.kubeconfig
-deployer.kubeconfig
+*kubeconfig*
 *.secret
 
 # local tooling

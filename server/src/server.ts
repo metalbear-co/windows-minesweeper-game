@@ -23,7 +23,7 @@ app.use(
   cors({
     origin: (origin) => {
       if (!origin) return "*";
-      if (origin === "https://minesweeper.metalbear.co") return origin;
+      if (origin === "https://minesweeper.metalbear.com") return origin;
       // Allow any localhost origin in dev
       if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
       if (DEV_ORIGINS.includes(origin)) return origin;
@@ -162,7 +162,7 @@ app.post("/game/submit", async (c) => {
     timeSeconds,
     difficulty: difficulty as Difficulty,
     isWinner: won,
-    url: "minesweeper.metalbear.co",
+    url: "minesweeper.metalbear.com",
   });
 
   return c.json({
