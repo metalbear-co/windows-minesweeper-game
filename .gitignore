@@ -10,3 +10,5 @@ dist/
 .claude/
 .DS_Store
 *.log
+
+values.yaml
