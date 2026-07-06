@@ -159,12 +159,37 @@
 
   <span id="taskclock" hidden></span>
 
-  <!-- RESULTS / CLAIM MODAL (unchanged) -->
+  <!-- RESULTS MODAL (Launch Week design) -->
   <div class="overlay" id="overlay">
-    <div class="modal">
-      <div class="titlebar"><div class="t"><span class="ico" id="modalIco">🏆</span><span id="modalTitle">You cleared the board!</span></div>
-        <div class="tbtns"><div class="tbtn" id="modalClose">✕</div></div></div>
-      <div class="body" id="modalBody"></div>
+    <div class="reswin">
+      <div class="reswin-tb">
+        <div class="reswin-tb-l"><span class="reswin-chip"><img src="metalbear-bear.png" alt=""></span>MetalBear Minesweeper.exe</div>
+        <div class="reswin-tb-btns"><span>_</span><span>□</span><span id="modalClose">×</span></div>
+      </div>
+      <div class="reswin-menu"><span><u>G</u>ame</span><span><u>H</u>elp</span></div>
+      <div class="reswin-body">
+        <div class="reswin-left">
+          <div class="eyebrow"><i></i>MetalBear Launch Week</div>
+          <h2 class="res-title" id="resTitle"></h2>
+          <div class="score-label">SCORE</div>
+          <div class="score-box" id="resScore">—</div>
+          <div class="stat-row">
+            <div class="stat"><span>TIME</span><b id="resTime">—</b></div>
+            <div class="stat"><span>CLEARED</span><b id="resCleared">—</b></div>
+            <div class="stat"><span>PLAYER</span><b id="resPlayer">—</b></div>
+          </div>
+          <div class="rank-note" id="resNote" hidden></div>
+        </div>
+        <div class="reswin-right">
+          <img class="reswin-mascot" src="img/mascot-board.svg" alt="MetalBear mascot with a Minesweeper board">
+          <div class="cta-stack">
+            <button class="res-cta res-cta-save" id="saveImg"><span class="res-cta-ico">💾</span> Save your score image</button>
+            <a class="res-cta" href="https://metalbear.co/slack" target="_blank" rel="noopener"><span class="res-cta-ico">💬</span> Join us in Slack <em>→</em></a>
+            <a class="res-cta" href="https://metalbear.com/launch-week/" target="_blank" rel="noopener"><span class="res-cta-ico">🪟</span> What's mirrord for Windows? <em>→</em></a>
+          </div>
+        </div>
+      </div>
+      <div class="reswin-footer"><span>mirrord for Windows · available now</span><span>metalbear.com</span></div>
     </div>
   </div>
 

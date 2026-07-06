@@ -3,7 +3,7 @@
    Added: seeded board (mulberry32), move tracking, real API calls.
 */
 import { startGame, submitGame, getLeaderboard } from './api.js';
-import { downloadImage, copyCaption, drawCard } from './share.js';
+import { downloadImage } from './share.js';
 
 /* ============================================================
    PRNG -- mulberry32 (must be bit-for-bit identical to server/src/prng.ts)
@@ -383,49 +383,37 @@ function showResults(result) {
   const won = result.won;
   const timeSeconds = result.timeSeconds || state.time;
   const handle = getHandle() || 'anon';
-  const dlabel = DIFFS[state.dif].label;
+  const dlabel = label(state.dif);
   const safeTotal = state.w * state.h - state.mines;
   const revealed = state.revealed;
 
   const score = result.score;  // null while the submission is in flight
-  const scoreStr = score != null ? score.toLocaleString() : '…';
+  const emoji = won ? '🏆' : '💥';
+  const rankPart = result.rank != null ? ` · Rank #${result.rank}` : '';
 
-  $('modalIco').textContent = won ? '🏆' : '💥';
-  $('modalTitle').textContent = won ? 'You cleared the board!' : 'Boom! You hit an evil mirrord.';
+  $('resTitle').textContent = `${emoji} Minesweeper · ${dlabel}${rankPart}`;
+  $('resScore').textContent = score != null ? score.toLocaleString() : '…';
+  $('resTime').textContent = `${timeSeconds}s`;
+  $('resCleared').textContent = `${revealed}/${safeTotal}`;
+  $('resPlayer').textContent = handle;
 
-  let note;
-  if (score == null) {
-    note = `<div class="rank-note" style="color:#555">Submitting score…</div>`;
-  } else if (result.onLeaderboard === false) {
-    note = `<div class="rank-note">Score <b>${scoreStr}</b> — <b>add a name</b> to claim your spot on the leaderboard.</div>`;
-  } else if (won) {
-    note = `<div class="rank-note">Score <b>${scoreStr}</b> — ranked <b>#${result.rank}</b> on ${dlabel}. Keep playing to climb!</div>`;
+  const note = $('resNote');
+  if (score != null && result.onLeaderboard === false) {
+    note.hidden = false;
+    note.textContent = 'Add a name to claim your spot on the leaderboard.';
   } else {
-    note = `<div class="rank-note">You revealed <b>${revealed}/${safeTotal}</b> before hitting a bear. Score <b>${scoreStr}</b>${result.rank != null ? `, ranked <b>#${result.rank}</b>` : ''}. Try again!</div>`;
+    note.hidden = true;
   }
 
-  // The modal preview renders the exact same canvas that gets shared/downloaded.
+  // Data for the downloaded PNG (Save button renders share.js drawCard off-screen).
   const shareData = { handle, difficulty: state.dif, timeSeconds, won, revealed, safeTotal, score, rank: result.rank };
-
-  $('modalBody').innerHTML = `
-    <canvas id="shareCanvas" class="sharecanvas"></canvas>
-    ${note}
-    <div class="sharebtns">
-      <button class="btn primary" id="saveImg">📸 Save image</button>
-      <button class="btn" id="copyCaption">📋 Copy caption</button>
-      <button class="btn" id="playAgain">↻ Play again</button>
-    </div>
-  `;
-  drawCard($('shareCanvas'), shareData);
-  $('overlay').classList.add('show');
-
   $('saveImg').onclick = () => downloadImage(shareData);
-  $('copyCaption').onclick = async () => {
-    const ok = await copyCaption(shareData);
-    if (ok) { $('copyCaption').textContent = '✓ Copied!'; setTimeout(() => $('copyCaption').textContent = '📋 Copy caption', 1500); }
-  };
-  $('playAgain').onclick = () => { closeModal(); newGame(); };
+
+  $('overlay').classList.add('show');
 }
+
+/* Capitalised full difficulty name for the title (DIFFS.label is abbreviated). */
+function label(dif) { return dif.charAt(0).toUpperCase() + dif.slice(1); }
 
 function closeModal() { $('overlay').classList.remove('show'); }
 

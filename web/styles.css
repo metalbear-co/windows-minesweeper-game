@@ -300,21 +300,7 @@ body{
 .modal .titlebar{cursor:default}
 .modal .body{padding:14px}
 
-/* share card */
-.sharecard{
-  background:linear-gradient(135deg,#101019,#241040 60%,#3a0f2e);
-  color:#fff; border:2px solid #000; padding:18px; position:relative; overflow:hidden;
-}
-.sharecard .grid{position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px); background-size:18px 18px; opacity:.5}
-.sharecard .sc-in{position:relative}
-.sc-top{display:flex; align-items:center; gap:8px; font-size:12px; letter-spacing:1px; opacity:.85; text-transform:uppercase}
-.sc-time{font-family:"Courier New",monospace; font-size:46px; font-weight:700; margin:6px 0 2px; color:#ffd54a}
-.sc-line{font-size:15px; margin:6px 0}
-.sc-foot{display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:12px; border-top:1px solid rgba(255,255,255,.25); padding-top:10px}
-.sc-foot .brand{font-weight:700}
-.sc-foot .win{background:#fff; color:#000; padding:1px 6px; border-radius:3px; font-weight:700}
-.sharecanvas{width:100%; height:auto; display:block; image-rendering:auto;
-  border:2px solid; border-color:var(--dk) var(--hi) var(--hi) var(--dk)}
+/* button row (used by the name-prompt modal) */
 .sharebtns{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
 
 .rank-note{font-size:12px; margin-top:10px; padding:8px; background:#fffbe6; border:1px solid #d9c64a}
@@ -328,4 +314,66 @@ body{
   .panel{width:100%; flex:1 1 100%}
   .cell,.cell.open{width:24px;height:24px;font-size:14px}
   .app{gap:8px; flex-wrap:wrap}
+}
+
+/* ===== Launch Week results window (modal) — Figma 5542:3546 ===== */
+.reswin{width:100%; max-width:1000px; background:var(--face);
+  border:2px solid; border-color:var(--hi) #6b6b6b #6b6b6b var(--hi);
+  box-shadow:6px 6px 0 rgba(0,0,0,.5); font-family:Tahoma,sans-serif;
+  max-height:94vh; overflow:auto; display:flex; flex-direction:column}
+.reswin-tb{display:flex; align-items:center; justify-content:space-between;
+  background:linear-gradient(90deg,#312d65,#6e66e2); color:#fff; font-weight:bold; font-size:15px; padding:5px 8px}
+.reswin-tb-l{display:flex; align-items:center; gap:9px}
+.reswin-chip{width:24px;height:24px;background:#fff;border-radius:4px;display:inline-flex;align-items:center;justify-content:center}
+.reswin-chip img{width:17px;height:17px;object-fit:contain;display:block}
+.reswin-tb-btns{display:flex; gap:3px}
+.reswin-tb-btns span{width:27px;height:22px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--face);border:2px solid var(--hi);color:#000;font-weight:bold;font-size:14px;cursor:default}
+.reswin-tb-btns #modalClose{cursor:pointer}
+.reswin-menu{display:flex; gap:16px; padding:7px 16px; font-size:15px; border-bottom:1px solid var(--lo)}
+
+.reswin-body{display:flex; gap:24px; padding:26px 30px 30px; align-items:center}
+.reswin-left{flex:1 1 0; min-width:0}
+.eyebrow{display:inline-flex; align-items:center; gap:8px; background:#2e2a5e; color:#ffcb5c;
+  font-family:Unbounded,sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; text-transform:uppercase;
+  padding:8px 18px; border-radius:100px; box-shadow:3px 3px 0 rgba(0,0,0,.15)}
+.eyebrow i{width:8px;height:8px;background:#e11d48;border-radius:2px;display:block}
+.res-title{font-family:Unbounded,sans-serif; font-weight:800; font-size:34px; letter-spacing:-1px;
+  color:#2e2a5e; margin:16px 0 0; line-height:1.15}
+.score-label{font-family:Unbounded,sans-serif; font-weight:700; font-size:10px; letter-spacing:3px; color:#756df3; margin:22px 0 8px}
+.score-box{background:#1a1836; border:4px solid #808080; border-right-color:#fff; border-bottom-color:#fff;
+  color:#ffcb5c; font-family:Unbounded,sans-serif; font-weight:800; font-size:72px; letter-spacing:4px;
+  text-shadow:0 0 20px rgba(255,203,92,.5); padding:0 30px; height:100px; display:flex; align-items:center; max-width:360px}
+.stat-row{display:flex; gap:8px; margin-top:22px; max-width:527px}
+.stat{flex:1 1 0; min-width:0; background:#e7e7e7; border:2px solid #808080; padding:12px 10px;
+  display:flex; flex-direction:column; align-items:center; gap:3px; text-align:center}
+.stat span{font-family:Unbounded,sans-serif; font-weight:700; font-size:9px; letter-spacing:2px; color:#756df3}
+.stat b{font-family:Unbounded,sans-serif; font-weight:700; font-size:22px; color:#2e2a5e; white-space:nowrap}
+.reswin-left .rank-note{margin-top:14px}
+
+.reswin-right{flex:0 0 372px; display:flex; flex-direction:column; align-items:stretch}
+.reswin-mascot{width:220px; height:auto; align-self:center; margin-bottom:-10px; pointer-events:none}
+.cta-stack{display:flex; flex-direction:column; gap:12px}
+.res-cta{width:100%; display:flex; align-items:center; gap:10px; height:59px; padding:0 22px; box-sizing:border-box;
+  font-family:Poppins,sans-serif; font-weight:600; font-size:18px; color:#2e2a5e; text-decoration:none;
+  background:#d2d0d0; border:2px solid #fff; cursor:pointer}
+.res-cta em{margin-left:auto; color:#756df3; font-style:normal; font-weight:700}
+.res-cta-ico{font-size:16px}
+.res-cta-save{background:#ffcb5c; border-width:3px; font-weight:700; box-shadow:4px 4px 0 rgba(0,0,0,.15); justify-content:center; gap:12px}
+.res-cta-save:active{box-shadow:2px 2px 0 rgba(0,0,0,.15)}
+
+.reswin-footer{display:flex; align-items:center; justify-content:space-between;
+  background:#2e2a5e; border-top:1px solid #fff; padding:11px 20px}
+.reswin-footer span:first-child{color:#f8cc8a; font-weight:bold; font-size:15px}
+.reswin-footer span:last-child{color:#fff; font-size:16px}
+
+@media (max-width:820px){
+  .reswin-body{flex-direction:column; gap:20px; padding:18px; align-items:stretch}
+  .reswin-left{width:100%}
+  .reswin-right{flex-basis:auto; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center}
+  .reswin-mascot{position:static; width:190px}
+  .cta-stack{position:static; width:100%; margin-top:12px}
+  .res-title{font-size:24px}
+  .score-box{font-size:52px; height:84px; max-width:none}
+  .stat b{font-size:18px}
 }
