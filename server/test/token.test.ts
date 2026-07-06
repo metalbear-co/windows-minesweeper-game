@@ -47,7 +47,7 @@ describe("shareToken", () => {
       timeSeconds: 47,
       difficulty: "expert" as const,
       isWinner: true,
-      url: "minesweeper.metalbear.co",
+      url: "minesweeper.metalbear.com",
     };
     const token = signShareToken(result);
 
@@ -71,7 +71,7 @@ describe("shareToken", () => {
       timeSeconds: 10,
       difficulty: "beginner" as const,
       isWinner: false,
-      url: "minesweeper.metalbear.co",
+      url: "minesweeper.metalbear.com",
     };
     // Sign twice with same (default dev) secret -- tokens must be equal
     const t1 = signShareToken(result);

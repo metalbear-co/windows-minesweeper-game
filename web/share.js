@@ -6,10 +6,10 @@ export function buildCaption(o) {
   const s = o.score != null ? `${o.score.toLocaleString()} pts` : null;
   if (o.won) {
     const rank = o.rank != null ? ` (ranked #${o.rank})` : '';
-    return `I scored ${s || `a ${o.timeSeconds}s clear`}${rank} on ${d} in MetalBear Minesweeper 🏆, think you can beat me? minesweeper.metalbear.co (brought to you by mirrord, now on Windows 🪟)`;
+    return `I scored ${s || `a ${o.timeSeconds}s clear`}${rank} on ${d} in MetalBear Minesweeper 🏆, think you can beat me? https://minesweeper.metalbear.com/ (brought to you by mirrord, now on Windows 🪟)`;
   }
   const rank = o.rank != null ? `, ranked #${o.rank}` : '';
-  return `I scored ${s || `${o.revealed}/${o.safeTotal} cells`}${rank} on ${d} in MetalBear Minesweeper 💥, can you do better? minesweeper.metalbear.co (brought to you by mirrord, now on Windows 🪟)`;
+  return `I scored ${s || `${o.revealed}/${o.safeTotal} cells`}${rank} on ${d} in MetalBear Minesweeper 💥, can you do better? https://minesweeper.metalbear.com/ (brought to you by mirrord, now on Windows 🪟)`;
 }
 
 export async function copyCaption(o) {
@@ -45,22 +45,17 @@ function bevel(ctx, x, y, w, h, raised = true, t = 3, fill = C.grey) {
   ctx.fillStyle = dark; ctx.fillRect(x, y + h - t, w, t); ctx.fillRect(x + w - t, y, t, h);
 }
 
-/* black LED readout like the mine/timer displays */
-function led(ctx, cx, cy, text, size) {
-  ctx.font = `700 ${size}px "Courier New", monospace`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const w = ctx.measureText(text).width;
-  const padX = size * 0.55, padY = size * 0.28;
-  const bx = cx - w / 2 - padX, by = cy - size / 2 - padY;
-  const bw = w + padX * 2, bh = size + padY * 2;
-  ctx.fillStyle = '#000'; ctx.fillRect(bx, by, bw, bh);
-  ctx.strokeStyle = '#500'; ctx.lineWidth = 2; ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,59,59,.75)'; ctx.shadowBlur = size * 0.22;
-  ctx.fillStyle = C.red; ctx.fillText(text, cx, cy + 1);
-  ctx.restore();
-  return { bx, by, bw, bh };
-}
+/* mascot art — preloaded once; redraw the last card when it lands.
+   ponytail: download path assumes it's loaded by game-over (it is — preload
+   starts at page load). If ever raced, await mascot.decode() in downloadImage. */
+const mascot = new Image();
+mascot.src = 'img/mascot-win98.png';
+const bear = new Image();
+bear.src = 'metalbear-bear.png';
+let _lastCard = null;
+const _redraw = () => { if (_lastCard) drawCard(_lastCard.c, _lastCard.o); };
+mascot.onload = _redraw;
+bear.onload = _redraw;
 
 /* sunken stat cell: small label + big value */
 function statBox(ctx, x, y, w, h, lab, val) {
@@ -79,6 +74,7 @@ export function drawCard(canvas, o) {
   const W = 1200, H = 630;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
+  _lastCard = { c: canvas, o };
   const d = label(o.difficulty);
   const safeTotal = o.safeTotal;
   const hasScore = o.score != null;
@@ -101,8 +97,8 @@ export function drawCard(canvas, o) {
   ctx.fillStyle = g; ctx.fillRect(tbx, tby, tbw, tbh);
   // bear chip
   ctx.fillStyle = '#fff'; ctx.fillRect(tbx + 8, tby + 8, 26, 26);
+  if (bear.complete && bear.naturalWidth) ctx.drawImage(bear, tbx + 9, tby + 9, 24, 24);
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.font = '20px "Segoe UI Emoji", sans-serif'; ctx.fillText('🐻', tbx + 11, tby + 22);
   ctx.fillStyle = '#fff'; ctx.font = '700 20px Poppins, sans-serif';
   ctx.fillText('MetalBear Minesweeper.exe', tbx + 44, tby + tbh / 2);
   // window buttons
@@ -139,11 +135,30 @@ export function drawCard(canvas, o) {
   ctx.fillStyle = C.yellow; ctx.textBaseline = 'middle'; ctx.fillText(d, W / 2, dpy + 18);
   ctx.textBaseline = 'alphabetic';
 
-  /* SCORE — the headline number, as an LED readout */
+  /* mascot at the computer, top-right — right edge on the Player box line */
+  if (mascot.complete && mascot.naturalWidth) {
+    const mw = 232, mh = 232;
+    const statRight = W / 2 + (4 * 250 + 3 * 18) / 2; // right edge of last stat box
+    const mxx = statRight - mw, myy = contentTop + 14;
+    ctx.drawImage(mascot, mxx, myy, mw, mh);
+  }
+
+  /* SCORE — the headline number in a purple readout box */
   ctx.fillStyle = C.sub; ctx.font = '600 18px Poppins, sans-serif';
-  ctx.fillText('SCORE', W / 2, contentTop + 152);
-  led(ctx, W / 2, contentTop + 218, hasScore ? scoreStr : (o.won ? `${o.timeSeconds}s` : `${o.revealed}/${safeTotal}`), 60);
-  if (hasScore) { ctx.fillStyle = C.sub; ctx.font = '600 19px Poppins, sans-serif'; ctx.fillText('points', W / 2, contentTop + 300); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('SCORE', W / 2, contentTop + 150);
+  const sbw = 360, sbh = 118, sbx = W / 2 - sbw / 2, sby = contentTop + 168;
+  ctx.fillStyle = C.desktop; ctx.fillRect(sbx, sby, sbw, sbh);
+  ctx.strokeStyle = C.hi; ctx.lineWidth = 4; ctx.strokeRect(sbx + 2, sby + 2, sbw - 4, sbh - 4);
+  const bigTxt = hasScore ? scoreStr : (o.won ? `${o.timeSeconds}s` : `${o.revealed}/${safeTotal}`);
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  let fs = 68; ctx.font = `700 ${fs}px Unbounded, sans-serif`;
+  while (ctx.measureText(bigTxt).width > sbw - 44 && fs > 34) { fs -= 4; ctx.font = `700 ${fs}px Unbounded, sans-serif`; }
+  ctx.shadowColor = 'rgba(255,203,125,.85)'; ctx.shadowBlur = 20;
+  ctx.fillStyle = C.hi; ctx.fillText(bigTxt, W / 2, sby + sbh / 2 + 2);
+  ctx.restore();
+  ctx.textBaseline = 'alphabetic';
 
   /* stat boxes */
   const boxes = [
@@ -167,7 +182,7 @@ export function drawCard(canvas, o) {
   bevel(ctx, 0, tky, W, tkh + 12, true, 2);
   bevel(ctx, 10, tky + 6, 150, 30, true, 2);
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.font = '18px "Segoe UI Emoji", sans-serif'; ctx.fillText('🐻', 20, tky + 21);
+  if (bear.complete && bear.naturalWidth) ctx.drawImage(bear, 16, tky + 9, 24, 24);
   ctx.fillStyle = C.ink; ctx.font = '700 17px Tahoma, sans-serif'; ctx.fillText('Start', 46, tky + 22);
   // clock chip
   bevel(ctx, W - 340, tky + 6, 330, 30, false, 2);

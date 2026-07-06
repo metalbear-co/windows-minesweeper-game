@@ -139,6 +139,24 @@
     </footer>
   </div>
 
+  <!-- WIN98 NAME PROMPT (replaces window.prompt for name entry / collisions) -->
+  <div class="overlay" id="nameOverlay">
+    <div class="modal" style="max-width:420px">
+      <div class="titlebar">
+        <div class="t"><span class="ico"><img src="metalbear-bear.png" alt=""></span><span>Choose a name</span></div>
+        <div class="tbtns"><div class="tbtn" id="namePromptX">✕</div></div>
+      </div>
+      <div class="body">
+        <p id="namePromptMsg" style="margin:0 0 10px"></p>
+        <div class="field"><input id="namePromptInput" maxlength="14" placeholder="your name"></div>
+        <div class="sharebtns" style="justify-content:flex-end; margin-top:12px">
+          <button class="btn" id="namePromptCancel">Cancel</button>
+          <button class="btn primary" id="namePromptOk">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <span id="taskclock" hidden></span>
 
   <!-- RESULTS / CLAIM MODAL (unchanged) -->
