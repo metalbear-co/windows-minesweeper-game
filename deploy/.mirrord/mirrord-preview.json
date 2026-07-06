@@ -1,0 +1,20 @@
+{
+  "target": {
+    "path": "deployment/minesweeper-server",
+    "namespace": "minesweeper"
+  },
+  "feature": {
+    "preview": {
+      "ttl_mins": 120,
+      "creation_timeout_secs": 600
+    },
+    "network": {
+      "incoming": {
+        "mode": "steal",
+        "http_filter": {
+          "header_filter": "X-MS-Tenant: {{ key }}"
+        }
+      }
+    }
+  }
+}

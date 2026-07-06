@@ -11,7 +11,8 @@ deploy/
   k8s/         Kubernetes manifests (Linux, namespace "minesweeper")
   .mirrord/    mirrord config for local dev against the cluster
 .github/
-  workflows/   CI/CD: deploy.yml (build + deploy on push to main)
+  workflows/   CI/CD: deploy.yml (build + deploy on push to main),
+               preview-env-pr.yml (mirrord preview env per PR)
 ```
 
 Deployment, CI/CD, and cluster-access setup live in **[`deploy/README.md`](deploy/README.md)**.
@@ -60,6 +61,10 @@ mirrord exec --config-file ../deploy/.mirrord/mirrord.json -- npm run dev
 ```
 
 Your local server steals incoming traffic from the cluster pod and routes outgoing connections (Redis, etc.) through the pod's network -- no need to run the cluster's dependencies locally.
+
+## Preview environments (PRs)
+
+Every PR gets an isolated [mirrord Preview Environment](https://metalbear.com/mirrord/docs/using-mirrord/preview-environments) in the cluster: the PR's image runs as its own pod behind the live URL, and only requests carrying the `X-MS-Tenant: pr-<n>` header reach it. The bot comment on the PR has the link and header to use. Details in [`deploy/README.md`](deploy/README.md#preview-environments-prs).
 
 ## How the game works
 

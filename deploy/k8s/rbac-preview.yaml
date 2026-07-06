@@ -1,0 +1,16 @@
+# Lets the CI ServiceAccount manage mirrord preview environments.
+# `mirrord-operator-ci` is a ClusterRole shipped by the mirrord operator chart,
+# scoped to preview sessions + the operator APIs the CLI needs -- no extra
+# access to cluster resources beyond what the deployer Role already grants.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: minesweeper-deployer-mirrord-ci
+subjects:
+  - kind: ServiceAccount
+    name: minesweeper-deployer
+    namespace: minesweeper
+roleRef:
+  kind: ClusterRole
+  name: mirrord-operator-ci
+  apiGroup: rbac.authorization.k8s.io

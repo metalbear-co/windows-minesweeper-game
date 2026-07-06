@@ -5,13 +5,15 @@ Two components in the `minesweeper` namespace:
 - **minesweeper-server** — one container serving the game UI (`web/`) **and** the API on port 3001.
 - **redis** — its own deployment + service, backed by a 1Gi PVC (`--appendonly yes`) so the leaderboard survives restarts.
 
-> **Status (not yet wired to a cluster).** We don't have Playground cluster access yet, so
-> CI/CD is written but inactive. The manifests, workflows, and RBAC are all in place and validated
-> locally on minikube. Everything below is the runbook for whoever has cluster access to turn it on.
+> **Status (wired to the Civo cluster).** The `KUBECONFIG_DATA` GitHub secret is set (deployer SA
+> token from the Civo cluster), so `deploy.yml` and `preview-env-pr.yml` are live. Note: the cluster
+> currently runs a manually pushed Dockerhub image (`rinkiyakedad/minesweeper-server`); the next push
+> to `main` switches it to CI-built GHCR images — make sure the `minesweeper-server` GHCR package is
+> **public** first (see "Preview environments" below).
 
-## Wiring CI/CD to the cluster (do this once you have kubeconfig access)
+## Wiring CI/CD to the cluster (already done for the Civo cluster)
 
-Whoever has admin access to the Playground cluster runs these, in order. No app code changes needed.
+Whoever has admin access to the cluster runs these, in order. No app code changes needed.
 
 1. **Bootstrap the namespace, RBAC, and Redis** — the "One-time bootstrap" block below.
 2. **Create the app secrets** (`minesweeper-secrets`) — also in that block.
@@ -27,6 +29,7 @@ references `secrets.KUBECONFIG_DATA`, so once the secret exists the pipeline is 
 ```bash
 kubectl apply -f deploy/k8s/namespace.yaml
 kubectl apply -f deploy/k8s/rbac-deployer.yaml
+kubectl apply -f deploy/k8s/rbac-preview.yaml   # mirrord preview envs (needs the operator installed)
 kubectl apply -f deploy/k8s/redis.yaml
 
 # App secrets (NOT committed) -- generate strong random values:
@@ -45,7 +48,7 @@ kubectl apply -f deploy/k8s/ingress.yaml
 
 | Secret | What | Used by |
 |--------|------|---------|
-| `KUBECONFIG_DATA` | base64 of a kubeconfig authenticating as the `minesweeper-deployer` ServiceAccount (see below) | deploy |
+| `KUBECONFIG_DATA` | base64 of a kubeconfig authenticating as the `minesweeper-deployer` ServiceAccount (see below) | deploy, preview |
 
 `GITHUB_TOKEN` (GHCR push) is automatic — no setup.
 
@@ -74,11 +77,37 @@ EOF
 base64 -w0 deployer.kubeconfig   # paste into the KUBECONFIG_DATA secret
 ```
 
-This token can only `get`/`patch` deployments in `minesweeper` — it cannot touch anything else in the cluster.
+This token can `get`/`patch` deployments in `minesweeper`, plus manage mirrord preview sessions
+(via the `mirrord-operator-ci` ClusterRole, bound in `rbac-preview.yaml`) — nothing else in the cluster.
 
 ## How CI/CD works
 
 - **Push to `main`** → `deploy.yml`: test → build+push `:sha-<gitsha>` → `kubectl set image` → `rollout status`. Automatic, no manual step.
+- **PR opened / pushed** → `preview-env-pr.yml`: build+push `:preview-pr-<n>-<sha>` → `mirrord preview start` → PR comment with the URL + header. **PR merged / closed** → `mirrord preview stop`.
+
+## Preview environments (PRs)
+
+Every PR against `main` gets a [mirrord Preview Environment](https://metalbear.com/mirrord/docs/using-mirrord/preview-environments):
+an isolated pod in the cluster running the PR's image, sharing the live Redis and ingress. Only requests
+carrying the PR's header reach the preview pod; everyone else keeps hitting the live game.
+
+- **Config:** [`deploy/.mirrord/mirrord-preview.json`](.mirrord/mirrord-preview.json) — targets
+  `deployment/minesweeper-server`, steals traffic matching `X-MS-Tenant: pr-<n>`.
+- **Workflow:** [`.github/workflows/preview-env-pr.yml`](../.github/workflows/preview-env-pr.yml) — builds
+  the image, runs `mirrord preview start -k pr-<n>` (with `--force` so new pushes replace the pod), and
+  posts/updates a PR comment. On close/merge it runs `mirrord preview stop`.
+- **Trying it:** open https://minesweeper.metalbear.com with the header `X-MS-Tenant: pr-<n>` set — via the
+  [mirrord Browser Extension](https://metalbear.com/mirrord/docs/using-mirrord/browser-extension) or
+  `curl -H "X-MS-Tenant: pr-<n>" https://minesweeper.metalbear.com/health`.
+- Previews also expire on their own after 2h (`ttl_mins`), so a stuck workflow can't leak pods.
+
+### Cluster prerequisites (already set up on the Civo cluster)
+
+1. mirrord operator installed with `operator.previewEnv: true` (Enterprise license).
+2. `deploy/k8s/rbac-preview.yaml` applied — binds the deployer SA to the operator's `mirrord-operator-ci` ClusterRole.
+3. The `ghcr.io/metalbear-co/minesweeper-server` package set to **public** (GitHub → org packages → package
+   settings → Danger Zone → change visibility). The package is created private on the first CI push; the
+   cluster pulls anonymously, so previews (and deploys) fail with a 401 until it's flipped. One-time step.
 
 ## Resource sizing & instance recommendations
 
