@@ -3,7 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MetalBear Minesweeper -- brought to you by mirrord on Windows</title>
+<title>MetalBear Minesweeper — brought to you by mirrord on Windows</title>
+<meta name="description" content="Play MetalBear Minesweeper and climb the leaderboard during mirrord Launch Week. Brought to you by mirrord — now on Windows.">
+<!-- Social share card (Open Graph + Twitter) -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://minesweeper.metalbear.com/">
+<meta property="og:title" content="MetalBear Minesweeper">
+<meta property="og:description" content="Play MetalBear Minesweeper and climb the leaderboard during mirrord Launch Week. Brought to you by mirrord — now on Windows.">
+<meta property="og:image" content="https://minesweeper.metalbear.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="663">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MetalBear Minesweeper">
+<meta name="twitter:description" content="Play MetalBear Minesweeper and climb the leaderboard during mirrord Launch Week. Brought to you by mirrord — now on Windows.">
+<meta name="twitter:image" content="https://minesweeper.metalbear.com/og-image.png">
+<!-- PostHog analytics (project: mirrord). Captures pageviews + autocapture. -->
+<script>
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  posthog.init('phc_wIZh92nyk4vu6HidiLFUzjW6piZlZszuWZZFBS7yHHe',{api_host:'https://us.i.posthog.com',person_profiles:'identified_only'});
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap" rel="stylesheet">
@@ -112,7 +130,7 @@
         <li><b>Daily Q&amp;A with the team</b> at 9am PT during every drop.</li>
       </ul>
       <div class="slack-btns">
-        <a class="hbtn white" href="https://metalbear.co/slack" target="_blank" rel="noopener">Join us on Slack →</a>
+        <a class="hbtn white" href="https://join.slack.com/t/metalbearcommunity/shared_invite/zt-421jeub9x-IPhYyq3t3y6p8ORZaZTXtQ" target="_blank" rel="noopener">Join us on Slack →</a>
         <a class="hbtn purple" href="https://metalbear.com/launch-week/" target="_blank" rel="noopener">See the lineup →</a>
       </div>
     </div>
@@ -139,14 +157,57 @@
     </footer>
   </div>
 
+  <!-- WIN98 NAME PROMPT (replaces window.prompt for name entry / collisions) -->
+  <div class="overlay" id="nameOverlay">
+    <div class="modal" style="max-width:420px">
+      <div class="titlebar">
+        <div class="t"><span class="ico"><img src="metalbear-bear.png" alt=""></span><span>Choose a name</span></div>
+        <div class="tbtns"><div class="tbtn" id="namePromptX">✕</div></div>
+      </div>
+      <div class="body">
+        <p id="namePromptMsg" style="margin:0 0 10px"></p>
+        <div class="field"><input id="namePromptInput" maxlength="14" placeholder="your name"></div>
+        <div class="sharebtns" style="justify-content:flex-end; margin-top:12px">
+          <button class="btn" id="namePromptCancel">Cancel</button>
+          <button class="btn primary" id="namePromptOk">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <span id="taskclock" hidden></span>
 
-  <!-- RESULTS / CLAIM MODAL (unchanged) -->
+  <!-- RESULTS MODAL (Launch Week design) -->
   <div class="overlay" id="overlay">
-    <div class="modal">
-      <div class="titlebar"><div class="t"><span class="ico" id="modalIco">🏆</span><span id="modalTitle">You cleared the board!</span></div>
-        <div class="tbtns"><div class="tbtn" id="modalClose">✕</div></div></div>
-      <div class="body" id="modalBody"></div>
+    <div class="reswin">
+      <div class="reswin-tb">
+        <div class="reswin-tb-l"><span class="reswin-chip"><img src="metalbear-bear.png" alt=""></span>MetalBear Minesweeper.exe</div>
+        <div class="reswin-tb-btns"><span>_</span><span>□</span><span id="modalClose">×</span></div>
+      </div>
+      <div class="reswin-menu"><span><u>G</u>ame</span><span><u>H</u>elp</span></div>
+      <div class="reswin-body">
+        <div class="reswin-left">
+          <div class="eyebrow"><i></i>MetalBear Launch Week</div>
+          <h2 class="res-title" id="resTitle"></h2>
+          <div class="score-label">SCORE</div>
+          <div class="score-box" id="resScore">—</div>
+          <div class="stat-row">
+            <div class="stat"><span>TIME</span><b id="resTime">—</b></div>
+            <div class="stat"><span>CLEARED</span><b id="resCleared">—</b></div>
+            <div class="stat"><span>PLAYER</span><b id="resPlayer">—</b></div>
+          </div>
+          <div class="rank-note" id="resNote" hidden></div>
+        </div>
+        <div class="reswin-right">
+          <img class="reswin-mascot" src="img/mascot-board.svg" alt="MetalBear mascot with a Minesweeper board">
+          <div class="cta-stack">
+            <button class="res-cta res-cta-save" id="saveImg"><span class="res-cta-ico">💾</span> Save your score image</button>
+            <a class="res-cta" href="https://join.slack.com/t/metalbearcommunity/shared_invite/zt-421jeub9x-IPhYyq3t3y6p8ORZaZTXtQ" target="_blank" rel="noopener"><span class="res-cta-ico">💬</span> Join us in Slack <em>→</em></a>
+            <a class="res-cta" href="https://metalbear.com/launch-week/" target="_blank" rel="noopener"><span class="res-cta-ico">🪟</span> What's mirrord for Windows? <em>→</em></a>
+          </div>
+        </div>
+      </div>
+      <div class="reswin-footer"><span>mirrord for Windows · available now</span><span>metalbear.com</span></div>
     </div>
   </div>
 

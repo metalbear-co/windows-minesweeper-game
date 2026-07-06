@@ -3,7 +3,7 @@
    Added: seeded board (mulberry32), move tracking, real API calls.
 */
 import { startGame, submitGame, getLeaderboard } from './api.js';
-import { downloadImage, copyCaption, drawCard } from './share.js';
+import { downloadImage } from './share.js';
 
 /* ============================================================
    PRNG -- mulberry32 (must be bit-for-bit identical to server/src/prng.ts)
@@ -287,40 +287,93 @@ function handleLoss() { submitSession(false); }
    from the replay; the client just shows it and refreshes the board. */
 async function submitSession(won) {
   const timeSeconds = state.time;
-  let handle = getHandle();
 
   // Ensure a name lands on the leaderboard: prompt if the nickname field is empty.
+  let handle = getHandle();
   if (!handle) {
-    handle = (window.prompt('Enter your name for the leaderboard:') || '').trim().slice(0, 14);
+    handle = (await win98Prompt('Enter your name for the leaderboard:')) || '';
     if (handle) $('handle').value = handle;  // reflect in the field so modal/share use it
   }
 
-  // Show modal immediately; score/rank fill in once the server responds.
-  showResults({ won, timeSeconds, score: null, rank: null });
-
+  // Unseeded fallback game -- can't submit; just show the local result.
   if (!state.gameId || !state.seed || !state.seedSig) {
-    // Unseeded fallback game -- can't submit
+    showResults({ won, timeSeconds, score: null, rank: null });
     return;
   }
 
+  // Resolve the name FIRST -- keep submitting/prompting until it lands or the
+  // player bails. The score card is only revealed once the name is settled, so a
+  // "name taken" dialog never appears on top of (or after) the results modal.
+  const nameKey = getNameKey();
+  let result = null;
   try {
-    const result = await submitGame({
-      gameId: state.gameId,
-      seed: state.seed,
-      seedSig: state.seedSig,
-      difficulty: state.dif,
-      moves: state.moves,
-      handle: handle || undefined,
-      timeSeconds,
-    });
-    state.submitResult = result;
-    if (result.claimToken) state.myToken = result.claimToken;  // highlight my row
-    // Re-render modal with authoritative server data
-    showResults({ won: result.won, timeSeconds, score: result.score, rank: result.rank });
-    loadLeaderboard();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      result = await submitGame({
+        gameId: state.gameId,
+        seed: state.seed,
+        seedSig: state.seedSig,
+        difficulty: state.dif,
+        moves: state.moves,
+        handle: handle || undefined,
+        nameKey,
+        timeSeconds,
+      });
+
+      if (result.reason === 'name_taken') {
+        const next = (await win98Prompt(`"${handle}" is already taken by another player. Pick a different name:`)) || '';
+        if (next) { handle = next; $('handle').value = next; continue; }
+        // Bailed out -- keep this (off-board) result and show the score anyway.
+      }
+      break;
+    }
   } catch (err) {
     console.warn('Score submission failed:', err);
   }
+
+  // Name is settled -- now reveal the score card with the final data.
+  if (result) {
+    state.submitResult = result;
+    if (result.claimToken) state.myToken = result.claimToken;  // highlight my row
+    showResults({ won: result.won, timeSeconds, score: result.score, rank: result.rank, onLeaderboard: result.onLeaderboard });
+    if (result.onLeaderboard) loadLeaderboard();
+  } else {
+    // Network error -- still show the local win/loss so the player isn't left hanging.
+    showResults({ won, timeSeconds, score: null, rank: null });
+  }
+}
+
+/* Per-browser secret that proves ownership of a leaderboard name (first-come). */
+function getNameKey() {
+  let k = localStorage.getItem('nameKey');
+  if (!k) { k = crypto.randomUUID() + crypto.randomUUID(); localStorage.setItem('nameKey', k); }
+  return k;
+}
+
+/* Win98-styled replacement for window.prompt. Resolves to a trimmed name, or
+   null if the player cancels. */
+function win98Prompt(message, defaultValue = '') {
+  return new Promise((resolve) => {
+    const ov = $('nameOverlay'), input = $('namePromptInput');
+    $('namePromptMsg').textContent = message;
+    input.value = defaultValue;
+    ov.classList.add('show');
+    input.focus(); input.select();
+
+    const close = (val) => {
+      ov.classList.remove('show');
+      input.onkeydown = null;
+      $('namePromptOk').onclick = $('namePromptCancel').onclick = $('namePromptX').onclick = null;
+      resolve(val);
+    };
+    const ok = () => close(input.value.trim().slice(0, 14));
+    $('namePromptOk').onclick = ok;
+    $('namePromptCancel').onclick = () => close(null);
+    $('namePromptX').onclick = () => close(null);
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') ok();
+      else if (e.key === 'Escape') close(null);
+    };
+  });
 }
 
 /* ============================================================
@@ -330,47 +383,37 @@ function showResults(result) {
   const won = result.won;
   const timeSeconds = result.timeSeconds || state.time;
   const handle = getHandle() || 'anon';
-  const dlabel = DIFFS[state.dif].label;
+  const dlabel = label(state.dif);
   const safeTotal = state.w * state.h - state.mines;
   const revealed = state.revealed;
 
   const score = result.score;  // null while the submission is in flight
-  const scoreStr = score != null ? score.toLocaleString() : '…';
+  const emoji = won ? '🏆' : '💥';
+  const rankPart = result.rank != null ? ` · Rank #${result.rank}` : '';
 
-  $('modalIco').textContent = won ? '🏆' : '💥';
-  $('modalTitle').textContent = won ? 'You cleared the board!' : 'Boom! You hit an evil mirrord.';
+  $('resTitle').textContent = `${emoji} Minesweeper · ${dlabel}${rankPart}`;
+  $('resScore').textContent = score != null ? score.toLocaleString() : '…';
+  $('resTime').textContent = `${timeSeconds}s`;
+  $('resCleared').textContent = `${revealed}/${safeTotal}`;
+  $('resPlayer').textContent = handle;
 
-  let note;
-  if (score == null) {
-    note = `<div class="rank-note" style="color:#555">Submitting score…</div>`;
-  } else if (won) {
-    note = `<div class="rank-note">Score <b>${scoreStr}</b> — ranked <b>#${result.rank}</b> on ${dlabel}. Keep playing to climb!</div>`;
+  const note = $('resNote');
+  if (score != null && result.onLeaderboard === false) {
+    note.hidden = false;
+    note.textContent = 'Add a name to claim your spot on the leaderboard.';
   } else {
-    note = `<div class="rank-note">You revealed <b>${revealed}/${safeTotal}</b> before hitting a bear. Score <b>${scoreStr}</b>${result.rank != null ? `, ranked <b>#${result.rank}</b>` : ''}. Try again!</div>`;
+    note.hidden = true;
   }
 
-  // The modal preview renders the exact same canvas that gets shared/downloaded.
+  // Data for the downloaded PNG (Save button renders share.js drawCard off-screen).
   const shareData = { handle, difficulty: state.dif, timeSeconds, won, revealed, safeTotal, score, rank: result.rank };
-
-  $('modalBody').innerHTML = `
-    <canvas id="shareCanvas" class="sharecanvas"></canvas>
-    ${note}
-    <div class="sharebtns">
-      <button class="btn primary" id="saveImg">📸 Save image</button>
-      <button class="btn" id="copyCaption">📋 Copy caption</button>
-      <button class="btn" id="playAgain">↻ Play again</button>
-    </div>
-  `;
-  drawCard($('shareCanvas'), shareData);
-  $('overlay').classList.add('show');
-
   $('saveImg').onclick = () => downloadImage(shareData);
-  $('copyCaption').onclick = async () => {
-    const ok = await copyCaption(shareData);
-    if (ok) { $('copyCaption').textContent = '✓ Copied!'; setTimeout(() => $('copyCaption').textContent = '📋 Copy caption', 1500); }
-  };
-  $('playAgain').onclick = () => { closeModal(); newGame(); };
+
+  $('overlay').classList.add('show');
 }
+
+/* Capitalised full difficulty name for the title (DIFFS.label is abbreviated). */
+function label(dif) { return dif.charAt(0).toUpperCase() + dif.slice(1); }
 
 function closeModal() { $('overlay').classList.remove('show'); }
 

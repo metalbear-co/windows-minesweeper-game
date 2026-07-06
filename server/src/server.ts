@@ -8,6 +8,7 @@ import { generateSeed, signSeed, verifySeed, signClaimToken, verifyClaimToken, s
 import { replayVerify, scoreSession, DIFFS, type Difficulty, type Move } from "./game.js";
 import { addScore, getLeaderboard as getLb } from "./leaderboard.js";
 import { storeClaim, getClaimStatus, executeClaim } from "./claim.js";
+import { reserveName } from "./names.js";
 
 const app = new Hono();
 
@@ -86,6 +87,7 @@ app.post("/game/submit", async (c) => {
     difficulty?: string;
     moves?: Move[];
     handle?: string;
+    nameKey?: string;
     timeSeconds?: number;
   };
 
@@ -129,23 +131,44 @@ app.post("/game/submit", async (c) => {
     return c.json({ error: "seed mismatch" }, 403);
   }
 
-  // Mark used atomically
-  const set = await redis.hsetnx(gameKey, "used", "1");
-  if (!set) {
-    return c.json({ error: "game already submitted" }, 409);
-  }
+  // NOTE: we verify + score BEFORE marking the game used, so a submission that
+  // is rejected for a missing/taken name can be retried under a different name.
+  // The single-use guard (hsetnx used) only fires once we actually finalise.
 
   // Replay verify (accepts wins and losses; rejects only tampered/invalid replays)
   const verification = replayVerify(difficulty as Difficulty, seed, moves, timeSeconds);
   if (!verification.ok) {
+    // Consume the game so a tampered replay can't be re-probed.
+    await redis.hsetnx(gameKey, "used", "1");
     return c.json({ accepted: false, reason: verification.reason }, 422);
   }
 
   const { won, revealed } = verification;
   const score = scoreSession(difficulty as Difficulty, won, revealed, timeSeconds);
 
-  // Sanitise handle
+  // Sanitise handle -- empty string means "no name given".
   const safeHandle = sanitiseHandle(handle);
+
+  // No name => show the score, but never write an anon row to the board.
+  // Game stays unused so the player can add a name and resubmit.
+  if (!safeHandle) {
+    return c.json({ accepted: true, won, revealed, score, timeSeconds, rank: null, onLeaderboard: false, reason: "name_required" });
+  }
+
+  // First-come name ownership: a name is locked to the first nameKey that used it.
+  if (typeof body.nameKey !== "string" || body.nameKey.length < 8) {
+    return c.json({ error: "missing nameKey" }, 400);
+  }
+  if ((await reserveName(redis, safeHandle, body.nameKey)) === "taken") {
+    // Return the score so the player keeps it; game stays unused for a rename+retry.
+    return c.json({ accepted: true, won, revealed, score, timeSeconds, rank: null, onLeaderboard: false, reason: "name_taken" });
+  }
+
+  // Finalise: consume the game exactly once now that the name is settled.
+  const set = await redis.hsetnx(gameKey, "used", "1");
+  if (!set) {
+    return c.json({ error: "game already submitted" }, 409);
+  }
 
   // Record on the running leaderboard (GT keeps the player's highest score).
   // SEASON is fixed for the whole event so a name maps to one row (no daily reset).
@@ -173,6 +196,7 @@ app.post("/game/submit", async (c) => {
     timeSeconds,
     rank,
     isLeader,
+    onLeaderboard: true,
     claimToken,
     shareToken,
   });
@@ -259,7 +283,8 @@ serve({ fetch: app.fetch, port: PORT }, () => {
 });
 
 /* ---- Helpers ---- */
+// Returns "" when no usable name was given -- callers treat that as "keep off the board".
 function sanitiseHandle(raw: string | undefined): string {
-  if (!raw || !raw.trim()) return "anon";
-  return raw.replace(/[^\x20-\x7E]/g, "").trim().slice(0, 14) || "anon";
+  if (!raw) return "";
+  return raw.replace(/[^\x20-\x7E]/g, "").trim().slice(0, 14);
 }
