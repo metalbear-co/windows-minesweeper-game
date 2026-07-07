@@ -286,7 +286,13 @@ function handleLoss() { submitSession(false); }
 /* Every session scores now -- win or loss. The server computes the real score
    from the replay; the client just shows it and refreshes the board. */
 async function submitSession(won) {
-  const timeSeconds = state.time;
+  // Submit the time derived from the recorded move timestamps -- NOT the display
+  // counter (state.time). The server validates timeSeconds against move.t with a
+  // 3s tolerance; a background-throttled setInterval drifts past that and gets the
+  // whole (winning) run rejected -> null score, off the leaderboard. move.t is the
+  // exact same clock the server checks, so this always agrees.
+  const lastMoveMs = state.moves.length ? Math.max(...state.moves.map(m => m.t)) : state.time * 1000;
+  const timeSeconds = Math.round(lastMoveMs / 1000);
 
   // Ensure a name lands on the leaderboard: prompt if the nickname field is empty.
   let handle = getHandle();
