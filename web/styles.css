@@ -44,6 +44,7 @@ body{
   display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.15);
   color:#fff; font-size:12px; font-weight:600; letter-spacing:.4px;
   padding:6px 14px; border-radius:20px; border:1px solid rgba(255,255,255,.3);
+  text-decoration:none;
 }
 .badge .dot{width:7px; height:7px; border-radius:50%; background:var(--mb-yellow)}
 .badge.light{background:#FFCB5C; color:var(--mb-navy); border:none; letter-spacing:1px}
