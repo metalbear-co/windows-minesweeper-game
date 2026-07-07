@@ -35,13 +35,15 @@ app.use(
   })
 );
 
-/* ---- Rate limiting: Redis incr + expire (10 submissions / IP / 10 min) ---- */
+/* ---- Rate limiting: Redis incr + expire (100 scored submissions / IP / 10 min) ----
+   Counts only finalized, verified games (see the call site). It's per-IP, so a whole
+   office / launch-week WiFi shares one bucket -- keep the cap generous. */
 async function checkRateLimit(ip: string): Promise<boolean> {
   const redis = getRedis();
   const key = `ratelimit:submit:${ip}`;
   const count = await redis.incr(key);
   if (count === 1) await redis.expire(key, 600);
-  return count <= 10;
+  return count <= 100;
 }
 
 function getIp(c: Context): string {
@@ -103,13 +105,6 @@ app.post("/game/submit", async (c) => {
     return c.json({ error: "invalid difficulty" }, 400);
   }
 
-  // Rate limit
-  const ip = getIp(c);
-  const allowed = await checkRateLimit(ip);
-  if (!allowed) {
-    return c.json({ error: "rate limit exceeded -- slow down!" }, 429);
-  }
-
   const redis = getRedis();
 
   // Verify seedSig
@@ -162,6 +157,13 @@ app.post("/game/submit", async (c) => {
   if ((await reserveName(redis, safeHandle, body.nameKey)) === "taken") {
     // Return the score so the player keeps it; game stays unused for a rename+retry.
     return c.json({ accepted: true, won, revealed, score, timeSeconds, rank: null, onLeaderboard: false, reason: "name_taken" });
+  }
+
+  // Rate limit here -- only count verified, name-settled games about to be scored.
+  // Checking before verification let junk/tampered submits and the client's name-retry
+  // loop burn the per-IP budget, locking out honest players on a shared launch-week IP.
+  if (!(await checkRateLimit(getIp(c)))) {
+    return c.json({ error: "rate limit exceeded -- slow down!" }, 429);
   }
 
   // Finalise: consume the game exactly once now that the name is settled.
