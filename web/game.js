@@ -496,6 +496,9 @@ board.addEventListener('touchend', () => { if (pressTimer) { clearTimeout(pressT
 
 $('smiley').addEventListener('click', newGame);
 $('modalClose').addEventListener('click', closeModal);
+// Play Again: close the results card and start a fresh game. newGame() keeps the
+// current difficulty and never touches the #handle input, so the name carries over.
+$('playAgain').addEventListener('click', () => { closeModal(); newGame(); });
 
 $('flagToggle').addEventListener('click', () => {
   state.flagMode = !state.flagMode;
