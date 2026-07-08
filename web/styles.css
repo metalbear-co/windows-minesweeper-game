@@ -396,10 +396,6 @@ body{
   line-height:1.35; text-align:center; padding:9px 18px;
 }
 .secbanner:hover{background:#2c2a52}
-.secbanner-tag{
-  background:var(--mb-yellow); color:var(--mb-navy); font-weight:700;
-  font-size:12px; letter-spacing:.3px; padding:3px 10px; border-radius:20px; white-space:nowrap;
-}
 .secbanner-txt b{color:var(--mb-yellow); font-weight:700}
 .secbanner-arrow{color:var(--mb-yellow); font-weight:700}
 @media (max-width:560px){
