@@ -125,6 +125,22 @@ describe("replayVerify", () => {
     expect(result.reason).toMatch(/fast|time/i);
   });
 
+  test("instant submit (plausible time claimed, ~0s server-measured elapsed) is rejected", () => {
+    const { moves, timeSeconds } = buildHonestRun(TEST_SEED, 4, 4);
+    // Consistent, above-floor claim -- but the server saw no wall-clock pass.
+    const result = replayVerify("beginner", TEST_SEED, moves, timeSeconds, 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/elapsed/i);
+  });
+
+  test("run is accepted when server-measured elapsed matches the claimed time", () => {
+    const { moves, timeSeconds } = buildHonestRun(TEST_SEED, 4, 4);
+    // A real client: at least `timeSeconds` of wall-clock actually elapsed.
+    const result = replayVerify("beginner", TEST_SEED, moves, timeSeconds, timeSeconds + 1);
+    expect(result.ok).toBe(true);
+    expect(result.won).toBe(true);
+  });
+
   test("invalid seed produces different board -- not a win", () => {
     const { moves, timeSeconds } = buildHonestRun(TEST_SEED, 4, 4);
     // Different seed means mines are in different places
