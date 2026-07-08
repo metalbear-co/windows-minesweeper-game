@@ -16,6 +16,10 @@ export const DIFFS: Record<Difficulty, DiffConfig> = {
   expert:       { w: 30, h: 16, m: 99, minTimeSeconds: 15 },
 };
 
+// Tolerance for the server-measured elapsed-time check: absorbs clock rounding
+// and network latency without giving a cheater a meaningful head start.
+const CLOCK_SKEW_SECONDS = 2;
+
 export interface Move {
   type: "reveal" | "flag" | "unflag";
   x: number;
@@ -89,12 +93,22 @@ function floodReveal(grid: Cell[][], w: number, h: number, startX: number, start
  * Replay the client's move list against the seeded board.
  * `ok` means the replay is valid and time-consistent (a legitimate session,
  * win OR loss). `won`/`revealed` describe the outcome for scoring.
+ *
+ * `elapsedSeconds`, when provided, is the wall-clock time the *server* measured
+ * between issuing the seed and receiving the submission. Because the claimed
+ * play time is measured from the first reveal -- which can only happen after we
+ * handed out the seed -- a legitimate run always burns at least that much real
+ * time. When the server measured less, the client is lying about time (e.g. it
+ * reconstructed the board from the public seed offline and submitted instantly).
+ * Omit it to skip the check (e.g. unit tests, or games issued before this field
+ * was recorded).
  */
 export function replayVerify(
   difficulty: Difficulty,
   hexSeed: string,
   moves: Move[],
-  claimedTimeSeconds: number
+  claimedTimeSeconds: number,
+  elapsedSeconds?: number
 ): VerifyResult {
   const fail = (reason: string): VerifyResult => ({ ok: false, reason, won: false, revealed: 0 });
 
@@ -140,6 +154,14 @@ export function replayVerify(
   if (Math.abs(claimedTimeSeconds - lastMoveSecs) > 3) {
     return { ok: false, won: false, revealed: totalRevealed,
       reason: `claimed time ${claimedTimeSeconds}s does not match move timestamps (last move at ${lastMoveSecs.toFixed(1)}s)` };
+  }
+  // Server-authoritative clock: the claimed play time can't exceed the real
+  // wall-clock time the server saw pass since it issued the seed. This is what
+  // kills the "solve offline from the public seed, submit instantly" attack --
+  // client-supplied move timestamps alone can't be trusted for this.
+  if (elapsedSeconds != null && claimedTimeSeconds > elapsedSeconds + CLOCK_SKEW_SECONDS) {
+    return { ok: false, won: false, revealed: totalRevealed,
+      reason: `claimed time ${claimedTimeSeconds}s exceeds server-measured elapsed ${elapsedSeconds.toFixed(1)}s` };
   }
   // A *win* claimed impossibly fast is rejected; a fast loss is legitimate.
   if (won && claimedTimeSeconds < conf.minTimeSeconds) {

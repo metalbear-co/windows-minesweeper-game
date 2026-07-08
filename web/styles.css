@@ -387,3 +387,22 @@ body{
   .score-box{font-size:52px; height:84px; max-width:none}
   .stat b{font-size:18px}
 }
+
+/* ===== SECURITY DISCLOSURE BANNER (credit: Nitzan Kletter / Daylight) ===== */
+.secbanner{
+  display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+  background:var(--mb-navy); color:#fff; text-decoration:none;
+  font-family:'Poppins',"Segoe UI",sans-serif; font-size:13.5px; font-weight:500;
+  line-height:1.35; text-align:center; padding:9px 18px;
+}
+.secbanner:hover{background:#2c2a52}
+.secbanner-tag{
+  background:var(--mb-yellow); color:var(--mb-navy); font-weight:700;
+  font-size:12px; letter-spacing:.3px; padding:3px 10px; border-radius:20px; white-space:nowrap;
+}
+.secbanner-txt b{color:var(--mb-yellow); font-weight:700}
+.secbanner-arrow{color:var(--mb-yellow); font-weight:700}
+@media (max-width:560px){
+  .secbanner{font-size:12.5px; padding:8px 12px; gap:8px}
+  .secbanner-txt{flex-basis:100%}
+}

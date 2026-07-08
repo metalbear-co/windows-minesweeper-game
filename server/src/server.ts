@@ -69,7 +69,7 @@ app.post("/game/start", async (c) => {
 
   // Store with 24h TTL. Leave `used` unset so submit's hsetnx(used) is the
   // atomic single-submission guard (hsetnx only sets when the field is absent).
-  await redis.hset(`game:${gameId}`, { difficulty, seed, seedSig });
+  await redis.hset(`game:${gameId}`, { difficulty, seed, seedSig, issuedAt: Date.now().toString() });
   await redis.expire(`game:${gameId}`, 24 * 60 * 60);
 
   return c.json({
@@ -114,7 +114,7 @@ app.post("/game/submit", async (c) => {
 
   // Fetch game record
   const gameKey = `game:${gameId}`;
-  const gameRec = await redis.hgetall(gameKey) as Partial<{ difficulty: string; seed: string; seedSig: string; used: string }>;
+  const gameRec = await redis.hgetall(gameKey) as Partial<{ difficulty: string; seed: string; seedSig: string; used: string; issuedAt: string }>;
   if (!gameRec || !gameRec.seed) {
     return c.json({ error: "game not found or expired" }, 404);
   }
@@ -130,8 +130,13 @@ app.post("/game/submit", async (c) => {
   // is rejected for a missing/taken name can be retried under a different name.
   // The single-use guard (hsetnx used) only fires once we actually finalise.
 
+  // Wall-clock elapsed since we issued the seed, measured server-side. Games
+  // issued before this field was recorded fall back to undefined (check skipped).
+  const issuedAt = Number(gameRec.issuedAt);
+  const elapsedSeconds = Number.isFinite(issuedAt) ? (Date.now() - issuedAt) / 1000 : undefined;
+
   // Replay verify (accepts wins and losses; rejects only tampered/invalid replays)
-  const verification = replayVerify(difficulty as Difficulty, seed, moves, timeSeconds);
+  const verification = replayVerify(difficulty as Difficulty, seed, moves, timeSeconds, elapsedSeconds);
   if (!verification.ok) {
     // Consume the game so a tampered replay can't be re-probed.
     await redis.hsetnx(gameKey, "used", "1");
