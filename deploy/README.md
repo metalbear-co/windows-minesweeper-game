@@ -92,13 +92,18 @@ an isolated pod in the cluster running the PR's image, sharing the live Redis an
 carrying the PR's header reach the preview pod; everyone else keeps hitting the live game.
 
 - **Config:** [`deploy/.mirrord/mirrord-preview.json`](.mirrord/mirrord-preview.json) — targets
-  `deployment/minesweeper-server`, steals traffic matching `X-MS-Tenant: pr-<n>`.
+  `deployment/minesweeper-server`. Uses the operator's default key-derived traffic filter
+  (`baggage: mirrord-session=pr-<n>`); no custom filter, which is what makes share links possible
+  (previews with a custom `http_filter` don't get a share host).
 - **Workflow:** [`.github/workflows/preview-env-pr.yml`](../.github/workflows/preview-env-pr.yml) — builds
   the image, runs `mirrord preview start -k pr-<n>` (with `--force` so new pushes replace the pod), and
   posts/updates a PR comment. On close/merge it runs `mirrord preview stop`.
-- **Trying it:** open https://minesweeper.metalbear.com with the header `X-MS-Tenant: pr-<n>` set — via the
+- **Trying it:** click the **share link** in the PR comment (`https://<slug>.preview.minesweeper.metalbear.com`) —
+  works in any browser, nothing to install. If share links aren't enabled on the cluster (see below), the
+  comment falls back to header instructions: set `baggage: mirrord-session=pr-<n>` on
+  https://minesweeper.metalbear.com via the
   [mirrord Browser Extension](https://metalbear.com/mirrord/docs/using-mirrord/browser-extension) or
-  `curl -H "X-MS-Tenant: pr-<n>" https://minesweeper.metalbear.com/health`.
+  `curl -H "baggage: mirrord-session=pr-<n>" https://minesweeper.metalbear.com/health`.
 - Previews also expire on their own after 2h (`ttl_mins`), so a stuck workflow can't leak pods.
 
 ### Cluster prerequisites (already set up on the Civo cluster)
@@ -108,6 +113,43 @@ carrying the PR's header reach the preview pod; everyone else keeps hitting the 
 3. The `ghcr.io/metalbear-co/minesweeper-server` package set to **public** (GitHub → org packages → package
    settings → Danger Zone → change visibility). The package is created private on the first CI push; the
    cluster pulls anonymously, so previews (and deploys) fail with a 401 until it's flipped. One-time step.
+
+### Shareable preview links (pending operator 3.183.0)
+
+Share links let reviewers open a preview at `https://<slug>.preview.minesweeper.metalbear.com` with no
+browser extension — the in-cluster `mirrord-share-ingress` injects the session header server-side. See
+[the docs](https://metalbear.com/mirrord/docs/use-cases/preview-environments#sharing-a-preview-via-a-link).
+
+**Blocked on:** the feature ships in operator **3.183.0**, which isn't released yet (latest published
+chart is 3.182.0). Once it's out, run the enablement steps below.
+
+1. Upgrade the operator with the share domain configured:
+   ```bash
+   helm repo update metalbear
+   helm upgrade mirrord-operator metalbear/mirrord-operator --version 3.183.0 --reuse-values \
+     --set operator.shareIngress.shareDomain=preview.minesweeper.metalbear.com
+   ```
+2. Install the share-ingress component:
+   ```bash
+   helm install mirrord-share-ingress metalbear/mirrord-operator-share-ingress \
+     --set shareIngress.shareDomain=preview.minesweeper.metalbear.com \
+     --set shareIngress.appDomain=minesweeper.metalbear.com
+   ```
+3. Create a wildcard DNS record `*.preview.minesweeper.metalbear.com` pointing at the same
+   load balancer as `minesweeper.metalbear.com` (the ingress-nginx LB).
+4. Create a wildcard TLS cert for `*.preview.minesweeper.metalbear.com` as the `share-ingress-tls`
+   secret in the `mirrord` namespace (wildcards need DNS-01 validation — the cluster has no
+   cert-manager, so either issue manually or install cert-manager with a DNS-01 solver):
+   ```bash
+   kubectl create secret tls share-ingress-tls --cert=wildcard.crt --key=wildcard.key -n mirrord
+   ```
+5. Route share hosts to the component:
+   ```bash
+   kubectl apply -f deploy/k8s/mirrord-share-ingress-ingress.yaml
+   ```
+
+After that, `mirrord preview start` prints a `preview URL` line, and the PR comment automatically
+switches from header instructions to the clickable link.
 
 ## Resource sizing & instance recommendations
 

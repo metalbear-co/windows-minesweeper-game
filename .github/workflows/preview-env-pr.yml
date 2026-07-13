@@ -66,34 +66,41 @@ jobs:
           mirrord --version
 
       - name: Start mirrord preview
+        id: preview
         run: |
+          set -o pipefail
           mirrord preview start \
             -f deploy/.mirrord/mirrord-preview.json \
             -i "${{ env.IMAGE }}" \
             -k "${{ env.PREVIEW_KEY }}" \
             --force \
-            --timeout 600
+            --timeout 600 | tee preview-start.log
+          # Share link support (operator >= 3.183.0 with shareIngress configured) prints a
+          # "preview URL" line; older operators don't, and the comment falls back to the header.
+          share_url=$(grep -o 'preview URL: https://[^ ]*' preview-start.log | head -1 | cut -d' ' -f3 || true)
+          echo "share_url=${share_url}" >> "$GITHUB_OUTPUT"
 
       - name: Post PR comment with preview link and header
         uses: actions/github-script@v7
         with:
           script: |
             const key = `${{ env.PREVIEW_KEY }}`;
-            const url = 'https://minesweeper.metalbear.com';
+            const shareUrl = `${{ steps.preview.outputs.share_url }}`;
+            const appUrl = 'https://minesweeper.metalbear.com';
+            const access = shareUrl
+              ? `Open the preview directly — no extension or headers needed:
+
+            ### 🔗 [${shareUrl}](${shareUrl})`
+              : `To send traffic to this preview, set the header \`baggage: mirrord-session=${key}\` on ${appUrl}:
+            - via the [mirrord Browser Extension](https://metalbear.com/mirrord/docs/using-mirrord/browser-extension), or
+            - \`curl -H "baggage: mirrord-session=${key}" ${appUrl}/health\``;
             const body = `## mirrord Preview Environment
 
             A preview environment is running for this PR.
 
-            | | |
-            |---|---|
-            | **Preview URL** | [${url}](${url}) |
-            | **Header** | \`X-MS-Tenant: ${key}\` |
+            ${access}
 
-            To send traffic to this preview:
-            - Use the [mirrord Browser Extension](https://metalbear.com/mirrord/docs/using-mirrord/browser-extension) and set the header for this URL, or
-            - \`curl -H "X-MS-Tenant: ${key}" ${url}/health\`
-
-            Requests without the header keep hitting the live deployment.
+            Requests to [${appUrl}](${appUrl}) without the preview header keep hitting the live deployment.
 
             *Preview is stopped when the PR is merged or closed.*
             `;

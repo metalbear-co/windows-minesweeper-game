@@ -64,7 +64,7 @@ Your local server steals incoming traffic from the cluster pod and routes outgoi
 
 ## Preview environments (PRs)
 
-Every PR gets an isolated [mirrord Preview Environment](https://metalbear.com/mirrord/docs/using-mirrord/preview-environments) in the cluster: the PR's image runs as its own pod behind the live URL, and only requests carrying the `X-MS-Tenant: pr-<n>` header reach it. The bot comment on the PR has the link and header to use. Details in [`deploy/README.md`](deploy/README.md#preview-environments-prs).
+Every PR gets an isolated [mirrord Preview Environment](https://metalbear.com/mirrord/docs/using-mirrord/preview-environments) in the cluster: the PR's image runs as its own pod behind the live URL, and only header-tagged requests reach it. The bot comment on the PR has a clickable share link (`https://<slug>.preview.minesweeper.metalbear.com`) — or, until share links are enabled on the cluster, instructions for the `baggage: mirrord-session=pr-<n>` header. Details in [`deploy/README.md`](deploy/README.md#preview-environments-prs).
 
 ## How the game works
 

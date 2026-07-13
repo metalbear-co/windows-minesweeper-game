@@ -1,0 +1,29 @@
+# Routes preview share links (https://<slug>.preview.minesweeper.metalbear.com) to the
+# mirrord-share-ingress Service, which injects the session header and forwards to the preview pod.
+# Prerequisites (see deploy/README.md "Shareable preview links"):
+#   - mirrord operator >= 3.183.0 with operator.shareIngress.shareDomain set
+#   - mirrord-operator-share-ingress chart installed in the mirrord namespace
+#   - wildcard DNS *.preview.minesweeper.metalbear.com -> the cluster's ingress LB
+#   - wildcard TLS cert in the share-ingress-tls secret (mirrord namespace)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mirrord-share-ingress
+  namespace: mirrord
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "*.preview.minesweeper.metalbear.com"
+      secretName: share-ingress-tls
+  rules:
+    - host: "*.preview.minesweeper.metalbear.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mirrord-share-ingress
+                port:
+                  number: 80
