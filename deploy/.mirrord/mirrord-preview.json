@@ -7,6 +7,12 @@
     "preview": {
       "ttl_mins": 120,
       "creation_timeout_secs": 600
+    },
+    "network": {
+      "incoming": {
+        "mode": "steal",
+        "ports": [3001]
+      }
     }
   }
 }

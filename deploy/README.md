@@ -114,42 +114,41 @@ carrying the PR's header reach the preview pod; everyone else keeps hitting the 
    settings → Danger Zone → change visibility). The package is created private on the first CI push; the
    cluster pulls anonymously, so previews (and deploys) fail with a 401 until it's flipped. One-time step.
 
-### Shareable preview links (pending operator 3.183.0)
+### Shareable preview links
 
 Share links let reviewers open a preview at `https://<slug>.preview.minesweeper.metalbear.com` with no
 browser extension — the in-cluster `mirrord-share-ingress` injects the session header server-side. See
 [the docs](https://metalbear.com/mirrord/docs/use-cases/preview-environments#sharing-a-preview-via-a-link).
 
-**Blocked on:** the feature ships in operator **3.183.0**, which isn't released yet (latest published
-chart is 3.182.0). Once it's out, run the enablement steps below.
+**Cluster side: done** (operator 3.183.0 upgraded with
+`operator.shareIngress.shareDomain=preview.minesweeper.metalbear.com`, `mirrord-operator-share-ingress`
+chart installed with matching `shareDomain` + `appDomain=minesweeper.metalbear.com`, and
+`deploy/k8s/mirrord-share-ingress-ingress.yaml` applied). Verified end-to-end by resolving a share host
+against the ingress LB directly.
 
-1. Upgrade the operator with the share domain configured:
-   ```bash
-   helm repo update metalbear
-   helm upgrade mirrord-operator metalbear/mirrord-operator --version 3.183.0 --reuse-values \
-     --set operator.shareIngress.shareDomain=preview.minesweeper.metalbear.com
-   ```
-2. Install the share-ingress component:
-   ```bash
-   helm install mirrord-share-ingress metalbear/mirrord-operator-share-ingress \
-     --set shareIngress.shareDomain=preview.minesweeper.metalbear.com \
-     --set shareIngress.appDomain=minesweeper.metalbear.com
-   ```
-3. Create a wildcard DNS record `*.preview.minesweeper.metalbear.com` pointing at the same
-   load balancer as `minesweeper.metalbear.com` (the ingress-nginx LB).
-4. Create a wildcard TLS cert for `*.preview.minesweeper.metalbear.com` as the `share-ingress-tls`
+**Still needed before links work publicly:**
+
+1. Wildcard DNS record `*.preview.minesweeper.metalbear.com` pointing at the same
+   load balancer as `minesweeper.metalbear.com` (the ingress-nginx LB, currently `212.2.252.71`).
+2. Wildcard TLS cert for `*.preview.minesweeper.metalbear.com` as the `share-ingress-tls`
    secret in the `mirrord` namespace (wildcards need DNS-01 validation — the cluster has no
    cert-manager, so either issue manually or install cert-manager with a DNS-01 solver):
    ```bash
    kubectl create secret tls share-ingress-tls --cert=wildcard.crt --key=wildcard.key -n mirrord
    ```
-5. Route share hosts to the component:
-   ```bash
-   kubectl apply -f deploy/k8s/mirrord-share-ingress-ingress.yaml
-   ```
 
-After that, `mirrord preview start` prints a `preview URL` line, and the PR comment automatically
-switches from header instructions to the clickable link.
+**Config gotchas** (both verified against the operator source, 3.183.0):
+
+- A share host is only minted for previews using the **default key-derived filter**: incoming
+  `mode: steal` with **no** custom `http_filter`. Omitting the whole `network` section silently
+  defaults to *mirror* mode, which gets no share host at all.
+- `incoming.ports` must pin the app port (`[3001]`): `mirrord-share-ingress` forwards to the target
+  Service on the first pinned port and **defaults to port 80** when none is set — which hangs, since
+  our Service listens on 3001. It also assumes the Service is named exactly like the target
+  deployment (true here: `minesweeper-server`).
+
+`mirrord preview start` prints the share link as a `preview URL` line, and the PR comment
+automatically shows the clickable link (falling back to header instructions if it's ever missing).
 
 ## Resource sizing & instance recommendations
 
