@@ -8,7 +8,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
 
 concurrency:
   group: preview-env-${{ github.event.pull_request.number }}
@@ -21,7 +21,8 @@ env:
 jobs:
   preview-start:
     name: Start preview (build, push, start, comment)
-    if: github.event.action != 'closed'
+    # Draft PRs don't get previews; marking ready-for-review starts one.
+    if: github.event.action != 'closed' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
