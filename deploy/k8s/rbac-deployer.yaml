@@ -13,13 +13,14 @@ metadata:
   name: minesweeper-deployer
   namespace: minesweeper
 rules:
+  # `kubectl rollout status` watches the Deployment object via an informer, so it
+  # needs list + watch on deployments (not just get/patch for `set image`).
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "patch"]
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: ["apps"]
     resources: ["deployments/status"]
     verbs: ["get"]
-  # rollout status watches the deployment's pods
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
