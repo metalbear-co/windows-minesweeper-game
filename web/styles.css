@@ -408,6 +408,21 @@ body{
 /* 16px keeps iOS Safari from zooming the page when the field is focused. */
 #startOverlay .field input{font-size:16px; padding:8px 10px}
 
+/* Custom name fold-out (replaces the native datalist so it matches the widget). */
+.field.name-field{position:relative}
+.name-suggest{
+  position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:5;
+  background:#fff; border:2px solid #7f7d7d; box-shadow:3px 3px 0 rgba(0,0,0,.25);
+  max-height:180px; overflow-y:auto;
+}
+.name-suggest .ns-row{
+  padding:9px 12px; font-family:Poppins,sans-serif; font-size:15px; color:#2e2a5e;
+  cursor:pointer; border-bottom:1px solid #ececf3;
+}
+.name-suggest .ns-row:last-child{border-bottom:none}
+.name-suggest .ns-row:hover,
+.name-suggest .ns-row:active{background:var(--mb-purple); color:#fff}
+
 .reswin-footer{display:flex; align-items:center; justify-content:space-between;
   background:#2e2a5e; border-top:1px solid #fff; padding:11px 20px}
 .reswin-footer span:first-child{color:#f8cc8a; font-weight:bold; font-size:15px}

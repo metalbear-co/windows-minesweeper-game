@@ -169,7 +169,10 @@
       <div class="body">
         <p>Enter your name and email to join the leaderboard. Top the <b>Expert</b> board by the
            end of KubeCon Japan to win — if you're not at the booth, we'll email you.</p>
-        <div class="field"><input id="startName" list="playerNames" maxlength="14" placeholder="your name" autocomplete="off"><datalist id="playerNames"></datalist></div>
+        <div class="field name-field">
+          <input id="startName" maxlength="14" placeholder="your name" autocomplete="off">
+          <div class="name-suggest" id="nameSuggest" hidden></div>
+        </div>
         <div class="field" style="margin-top:8px"><input id="startEmail" type="email" inputmode="email" maxlength="120" placeholder="you@example.com" autocomplete="off"></div>
         <div class="small startErr" id="startErr" hidden></div>
         <div class="small startConsent">We'll only use your email to notify you if you win. See our

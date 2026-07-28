@@ -134,23 +134,36 @@ function askPlayer() {
   return new Promise((resolve) => {
     const ov = $('startOverlay'), n = $('startName'), e = $('startEmail'), err = $('startErr');
     const roster = loadRoster();
+    const names = Object.keys(roster);
+    const sug = $('nameSuggest');
 
-    // Fill the name dropdown with everyone who's played on this device.
-    $('playerNames').innerHTML = Object.keys(roster)
-      .map(nm => `<option value="${escapeHtml(nm)}"></option>`).join('');
+    // Custom fold-out of players who've played on this device (styled to match the
+    // widget, unlike the native <datalist> dropdown). Filters as you type.
+    const renderSuggest = () => {
+      const f = n.value.trim().toLowerCase();
+      const matches = names.filter(nm => nm.toLowerCase().includes(f));
+      sug.innerHTML = matches.map(nm => `<div class="ns-row" data-name="${escapeHtml(nm)}">${escapeHtml(nm)}</div>`).join('');
+      sug.hidden = matches.length === 0;
+    };
+    const pick = (nm) => { n.value = nm; if (roster[nm]) e.value = roster[nm]; sug.hidden = true; e.focus(); };
 
-    n.value = lastName; e.value = lastEmail; err.hidden = true;
+    n.value = lastName; e.value = lastEmail; err.hidden = true; sug.hidden = true;
     ov.classList.add('show');
     n.focus(); n.select();
 
-    // Picking / typing a known name auto-fills that player's saved email.
-    const onName = () => { const hit = roster[n.value.trim()]; if (hit) e.value = hit; };
-    n.oninput = onName;
+    n.onfocus = renderSuggest;
+    // Typing filters the list, and an exact name match auto-fills that player's email.
+    n.oninput = () => { renderSuggest(); const hit = roster[n.value.trim()]; if (hit) e.value = hit; };
+    n.onblur = () => setTimeout(() => { sug.hidden = true; }, 120);
+    sug.onmousedown = (ev) => ev.preventDefault();   // keep the input focused so the tap registers
+    sug.onclick = (ev) => { const row = ev.target.closest('.ns-row'); if (row) pick(row.dataset.name); };
 
     const done = (val) => {
       ov.classList.remove('show');
       $('startOk').onclick = null; $('startX').onclick = null;
-      n.onkeydown = null; e.onkeydown = null; n.oninput = null;
+      n.onkeydown = null; e.onkeydown = null;
+      n.onfocus = null; n.oninput = null; n.onblur = null;
+      sug.onmousedown = null; sug.onclick = null; sug.hidden = true;
       resolve(val);
     };
     const submit = () => {
