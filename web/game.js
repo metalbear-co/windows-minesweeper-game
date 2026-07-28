@@ -212,7 +212,8 @@ async function newGame() {
 }
 
 function renderBoard() {
-  board.dataset.dif = state.dif;   // drives the mobile beginner-board sizing in CSS
+  board.dataset.dif = state.dif;
+  board.style.setProperty('--cols', state.w);   // drives fit-to-width cell sizing on mobile
   board.style.gridTemplateColumns = `repeat(${state.w}, 1fr)`;
   board.innerHTML = '';
   for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {

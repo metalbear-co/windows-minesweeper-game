@@ -321,15 +321,27 @@ body{
   .cell,.cell.open{width:24px;height:24px;font-size:14px}
   .app{gap:8px; flex-wrap:wrap}
 
-  /* Beginner (9x9) is the only board that fits a phone -- scale its cells to fill
-     the screen width for comfortable taps. Intermediate/Expert stay fixed-size and
-     scroll (too wide to fit). --bc caps at 38px so it doesn't balloon on tablets. */
-  .board[data-dif="beginner"]{ --bc:min(38px, calc((100vw - 54px) / 9)); }
-  .board[data-dif="beginner"] .cell,
-  .board[data-dif="beginner"] .cell.open{
+  /* Fit the whole board to the screen width so nothing runs off-screen, whatever
+     the difficulty. --cols is set per game in renderBoard(); cells scale down to
+     fit (capped at 38px so small boards don't balloon on wider phones/tablets).
+     Beginner stays comfortably tappable; Intermediate/Expert get smaller but the
+     entire board is visible instead of overflowing. */
+  .board{ --bc:min(38px, calc((100vw - 26px) / var(--cols, 9))); }
+  .board .cell, .board .cell.open{
     box-sizing:border-box; width:var(--bc); height:var(--bc);
-    font-size:calc(var(--bc) * .5);
+    font-size:calc(var(--bc) * .55); line-height:1;
   }
+}
+
+/* Phone navbar: the full link menu can't fit the pill -- drop the secondary links
+   and keep a clean logo + Try Free. Links live on metalbear.com anyway. */
+@media (max-width:640px){
+  .hero .navlinks, .hero .stars, .hero .signin{display:none}
+  .hero .nav{
+    width:auto; max-width:calc(100% - 24px); gap:12px;
+    justify-content:space-between; padding:8px 8px 8px 16px;
+  }
+  .hero .nav .logo{margin-right:auto}
 }
 
 /* ===== Launch Week results window (modal) — Figma 5542:3546 ===== */
