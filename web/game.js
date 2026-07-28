@@ -118,18 +118,39 @@ async function ensureIdentity() {
   return true;
 }
 
+/* Device-local roster of players who've entered on THIS iPad, so a returning
+   player can pick their name and have their email auto-filled. Stored only in
+   localStorage -- never sent to other clients (emails stay off the wire). */
+function loadRoster() {
+  try { return JSON.parse(localStorage.getItem('msw_players') || '{}'); } catch { return {}; }
+}
+function rememberPlayer(name, email) {
+  const r = loadRoster(); r[name] = email;
+  try { localStorage.setItem('msw_players', JSON.stringify(r)); } catch {}
+}
+
 /* Start popup -> resolves {name, email} or null if dismissed. */
 function askPlayer() {
   return new Promise((resolve) => {
     const ov = $('startOverlay'), n = $('startName'), e = $('startEmail'), err = $('startErr');
+    const roster = loadRoster();
+
+    // Fill the name dropdown with everyone who's played on this device.
+    $('playerNames').innerHTML = Object.keys(roster)
+      .map(nm => `<option value="${escapeHtml(nm)}"></option>`).join('');
+
     n.value = lastName; e.value = lastEmail; err.hidden = true;
     ov.classList.add('show');
     n.focus(); n.select();
 
+    // Picking / typing a known name auto-fills that player's saved email.
+    const onName = () => { const hit = roster[n.value.trim()]; if (hit) e.value = hit; };
+    n.oninput = onName;
+
     const done = (val) => {
       ov.classList.remove('show');
       $('startOk').onclick = null; $('startX').onclick = null;
-      n.onkeydown = null; e.onkeydown = null;
+      n.onkeydown = null; e.onkeydown = null; n.oninput = null;
       resolve(val);
     };
     const submit = () => {
@@ -139,6 +160,7 @@ function askPlayer() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         err.textContent = 'Please enter a valid email.'; err.hidden = false; e.focus(); return;
       }
+      rememberPlayer(name, email);
       done({ name, email });
     };
     $('startOk').onclick = submit;
@@ -542,16 +564,17 @@ document.addEventListener('mouseup', () => { if (!state.over) $('smiley').textCo
 board.addEventListener('click', async e => {
   const t = e.target.closest('.cell'); if (!t) return;
   const x = +t.dataset.x, y = +t.dataset.y;
-  // First move of the game -> gate on name + email. askPlayer() focuses synchronously
-  // inside this tap gesture so the iPad keyboard opens.
-  if (!state.identityOk) { if (!(await ensureIdentity())) return; }
+  // First tap of the game just wakes the popup (focuses synchronously so the iPad
+  // keyboard opens). It is NOT a move -- the board only reveals on the player's next
+  // deliberate tap, once name + email are in.
+  if (!state.identityOk) { await ensureIdentity(); return; }
   if (state.flagMode) toggleFlag(x, y); else reveal(x, y);
   if (!state.over) $('smiley').textContent = '🙂';
 });
 board.addEventListener('contextmenu', async e => {
   e.preventDefault();
   const t = e.target.closest('.cell'); if (!t) return;
-  if (!state.identityOk) { if (!(await ensureIdentity())) return; }
+  if (!state.identityOk) { await ensureIdentity(); return; }
   toggleFlag(+t.dataset.x, +t.dataset.y);
 });
 
