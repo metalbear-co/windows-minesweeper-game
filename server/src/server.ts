@@ -283,7 +283,7 @@ app.post("/claim", async (c) => {
 });
 
 /* ---- GET /admin/emails.csv?key=<token> ----
-   Downloads the captured player emails as CSV (name,email). Guarded by the
+   Downloads captured players as CSV (name,email,expert_score). Guarded by the
    ADMIN_TOKEN secret; disabled entirely when that secret isn't set, so it can
    never be left open on a default. */
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
@@ -321,9 +321,25 @@ app.get("/admin/emails.csv", async (c) => {
   const headerToken = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
   if (!tokenOk(c.req.query("key") ?? headerToken)) return c.json({ error: "forbidden" }, 403);
 
-  const map = await getRedis().hgetall(`emails:${SEASON}`) as Record<string, string>;
-  const rows = Object.entries(map).map(([name, email]) => `${csvCell(name)},${csvCell(email)}`);
-  const csv = ["name,email", ...rows].join("\n") + "\n";
+  const redis = getRedis();
+  const emails = await redis.hgetall(`emails:${SEASON}`) as Record<string, string>;
+
+  // Join with the Expert leaderboard (the prize board). Members are stored as
+  // `{claimToken}:{handle}`, so map handle -> score (one entry per name).
+  const rawLb = await redis.zrevrange("lb:expert", 0, -1, "WITHSCORES");
+  const expertByName: Record<string, number> = {};
+  for (let i = 0; i < rawLb.length; i += 2) {
+    const member = rawLb[i];
+    const c = member.indexOf(":");
+    const handle = c === -1 ? member : member.slice(c + 1);
+    expertByName[handle] = Number(rawLb[i + 1]);
+  }
+
+  const rows = Object.entries(emails).map(([name, email]) => {
+    const s = expertByName[name];
+    return `${csvCell(name)},${csvCell(email)},${s != null ? s : ""}`;
+  });
+  const csv = ["name,email,expert_score", ...rows].join("\n") + "\n";
 
   return c.body(csv, 200, {
     "Content-Type": "text/csv; charset=utf-8",
