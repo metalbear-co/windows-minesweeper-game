@@ -60,7 +60,7 @@ const DIFFS = {
    State
    ============================================================ */
 let state = {
-  dif: 'intermediate',
+  dif: 'expert',
   grid: [], w: 0, h: 0, mines: 0,
   started: false, over: false, win: false,
   flags: 0, revealed: 0,
@@ -76,6 +76,10 @@ let state = {
   // leaderboard data
   lbData: null,
   myToken: null,
+  // player email, collected in the start popup, sent with the score submission
+  email: '',
+  // whether name + email have been confirmed for the current game (gates the first move)
+  identityOk: false,
 };
 
 /* ============================================================
@@ -91,7 +95,65 @@ function escapeHtml(s) {
 /* ============================================================
    Board setup
    ============================================================ */
+
+/* The Expert board renders immediately on load; the start popup only appears when
+   someone first tries to play (see the board tap handlers). It re-appears for every
+   new game because newGame() clears state.identityOk. Pre-filled with the last entry
+   so a repeat player just taps Start, while a new walk-up on the iPad types over it. */
+let lastName = '';
+let lastEmail = '';
+
+/* Make sure we have a name + email for this game before the first move. Returns
+   true once identity is set, false if the popup was dismissed. Must be called
+   synchronously from the tap/click handler so iOS raises the keyboard. */
+async function ensureIdentity() {
+  if (state.identityOk) return true;
+  const who = await askPlayer();
+  if (!who) return false;
+  lastName = who.name; lastEmail = who.email;
+  state.email = who.email;
+  $('handle').value = who.name;   // canonical name store (getHandle/showResults read it)
+  $('playingAs').textContent = `Playing as ${who.name}`;
+  state.identityOk = true;
+  return true;
+}
+
+/* Start popup -> resolves {name, email} or null if dismissed. */
+function askPlayer() {
+  return new Promise((resolve) => {
+    const ov = $('startOverlay'), n = $('startName'), e = $('startEmail'), err = $('startErr');
+    n.value = lastName; e.value = lastEmail; err.hidden = true;
+    ov.classList.add('show');
+    n.focus(); n.select();
+
+    const done = (val) => {
+      ov.classList.remove('show');
+      $('startOk').onclick = null; $('startX').onclick = null;
+      n.onkeydown = null; e.onkeydown = null;
+      resolve(val);
+    };
+    const submit = () => {
+      const name = n.value.trim().slice(0, 14);
+      const email = e.value.trim().slice(0, 120);
+      if (!name) { err.textContent = 'Please enter your name.'; err.hidden = false; n.focus(); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        err.textContent = 'Please enter a valid email.'; err.hidden = false; e.focus(); return;
+      }
+      done({ name, email });
+    };
+    $('startOk').onclick = submit;
+    $('startX').onclick = () => done(null);
+    const onKey = (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+      else if (ev.key === 'Escape') done(null);
+    };
+    n.onkeydown = onKey; e.onkeydown = onKey;
+  });
+}
+
 async function newGame() {
+  state.identityOk = false;          // re-prompt for name + email on this game's first move
+  $('playingAs').textContent = '';
   const d = DIFFS[state.dif];
   state.w = d.w; state.h = d.h; state.mines = d.m;
   state.grid = []; state.started = false; state.over = false; state.win = false;
@@ -128,6 +190,7 @@ async function newGame() {
 }
 
 function renderBoard() {
+  board.dataset.dif = state.dif;   // drives the mobile beginner-board sizing in CSS
   board.style.gridTemplateColumns = `repeat(${state.w}, 1fr)`;
   board.innerHTML = '';
   for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
@@ -323,6 +386,7 @@ async function submitSession(won) {
         handle: handle || undefined,
         nameKey,
         timeSeconds,
+        email: state.email || undefined,
       });
 
       if (result.reason === 'name_taken') {
@@ -475,21 +539,26 @@ board.addEventListener('mousedown', e => {
 });
 document.addEventListener('mouseup', () => { if (!state.over) $('smiley').textContent = '🙂'; });
 
-board.addEventListener('click', e => {
+board.addEventListener('click', async e => {
   const t = e.target.closest('.cell'); if (!t) return;
   const x = +t.dataset.x, y = +t.dataset.y;
+  // First move of the game -> gate on name + email. askPlayer() focuses synchronously
+  // inside this tap gesture so the iPad keyboard opens.
+  if (!state.identityOk) { if (!(await ensureIdentity())) return; }
   if (state.flagMode) toggleFlag(x, y); else reveal(x, y);
   if (!state.over) $('smiley').textContent = '🙂';
 });
-board.addEventListener('contextmenu', e => {
+board.addEventListener('contextmenu', async e => {
   e.preventDefault();
   const t = e.target.closest('.cell'); if (!t) return;
+  if (!state.identityOk) { if (!(await ensureIdentity())) return; }
   toggleFlag(+t.dataset.x, +t.dataset.y);
 });
 
 let pressTimer = null;
 board.addEventListener('touchstart', e => {
   const t = e.target.closest('.cell'); if (!t) return;
+  if (!state.identityOk) return;   // require name + email (via a normal tap) before flagging
   pressTimer = setTimeout(() => { toggleFlag(+t.dataset.x, +t.dataset.y); pressTimer = null; }, 350);
 }, { passive: true });
 board.addEventListener('touchend', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }, { passive: true });

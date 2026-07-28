@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono, type Context } from "hono";
@@ -15,7 +16,8 @@ const app = new Hono();
 const PORT = Number(process.env.PORT ?? 3001);
 
 // Fixed identity for the running event -- keeps each name to one leaderboard row.
-const SEASON = "launchweek";
+// Bumping this string starts a fresh leaderboard (old scores live under the old key).
+const SEASON = "kubecon-japan-2026";
 
 /* ---- CORS ---- */
 const DEV_ORIGINS = ["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:8080", "http://127.0.0.1:8080"];
@@ -91,6 +93,7 @@ app.post("/game/submit", async (c) => {
     handle?: string;
     nameKey?: string;
     timeSeconds?: number;
+    email?: string;
   };
 
   if (!body) return c.json({ error: "bad request" }, 400);
@@ -186,6 +189,14 @@ app.post("/game/submit", async (c) => {
   // Store claim record
   await storeClaim(redis, claimToken, difficulty, SEASON, safeHandle, rank);
 
+  // Capture the player's email (collected in the start popup) so we can reach the
+  // winner if they're not at the booth. Keyed by name within the event; overwrites
+  // on replay so the latest address wins. Skipped silently if absent/malformed.
+  const email = (body.email ?? "").trim().slice(0, 120);
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    await redis.hset(`emails:${SEASON}`, safeHandle, email);
+  }
+
   // Build share token compatible with share-image-service
   const shareToken = signShareToken({
     handle: safeHandle,
@@ -269,6 +280,56 @@ app.post("/claim", async (c) => {
   if (result === "not_leader") return c.json({ error: "not the current leader" }, 403);
   if (result === "window_closed") return c.json({ error: "claim window not open" }, 403);
   return c.json({ error: "not found" }, 404);
+});
+
+/* ---- GET /admin/emails.csv?key=<token> ----
+   Downloads the captured player emails as CSV (name,email). Guarded by the
+   ADMIN_TOKEN secret; disabled entirely when that secret isn't set, so it can
+   never be left open on a default. */
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
+
+function tokenOk(provided: string | undefined): boolean {
+  if (!ADMIN_TOKEN || !provided) return false;
+  const a = Buffer.from(provided), b = Buffer.from(ADMIN_TOKEN);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// Throttle the admin endpoint so it can't be used as a free token-brute oracle.
+async function checkAdminRateLimit(ip: string): Promise<boolean> {
+  const redis = getRedis();
+  const key = `ratelimit:admin:${ip}`;
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, 600);
+  return count <= 30;
+}
+
+// Quote for CSV AND neutralise spreadsheet formula injection: a cell starting
+// with = + - @ (or a control char) gets a leading apostrophe so Excel/Sheets
+// treat player-controlled names/emails as text, never as a formula.
+function csvCell(s: string): string {
+  const guarded = /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  return `"${guarded.replace(/"/g, '""')}"`;
+}
+
+app.get("/admin/emails.csv", async (c) => {
+  if (!ADMIN_TOKEN) return c.json({ error: "admin export disabled" }, 503);
+  if (!(await checkAdminRateLimit(getIp(c)))) return c.json({ error: "rate limit exceeded" }, 429);
+
+  // Accept the token via Authorization: Bearer <token> (keeps it out of logs)
+  // or the ?key= query param (convenient for a browser download).
+  const auth = c.req.header("authorization");
+  const headerToken = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
+  if (!tokenOk(c.req.query("key") ?? headerToken)) return c.json({ error: "forbidden" }, 403);
+
+  const map = await getRedis().hgetall(`emails:${SEASON}`) as Record<string, string>;
+  const rows = Object.entries(map).map(([name, email]) => `${csvCell(name)},${csvCell(email)}`);
+  const csv = ["name,email", ...rows].join("\n") + "\n";
+
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="minesweeper-emails-${SEASON}.csv"`,
+    "Cache-Control": "no-store",
+  });
 });
 
 /* ---- Health check ---- */
