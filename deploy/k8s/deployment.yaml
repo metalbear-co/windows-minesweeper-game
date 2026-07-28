@@ -35,6 +35,14 @@ spec:
                 secretKeyRef:
                   name: minesweeper-secrets
                   key: share-secret
+            # Token for GET /admin/emails.csv. Omit this key from the secret to
+            # disable the export endpoint entirely.
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: minesweeper-secrets
+                  key: admin-token
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

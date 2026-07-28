@@ -53,6 +53,11 @@ body{
   font-size:clamp(34px,5vw,64px); line-height:1.04; margin:20px 0 0; letter-spacing:-1px;
 }
 .hero h1 .accent, .accent{color:var(--mb-yellow)}
+.hero .jp-line{
+  font-family:'Unbounded',sans-serif; font-weight:700; color:#fff;
+  font-size:clamp(20px,3vw,34px); line-height:1.2; letter-spacing:1px;
+  margin:14px auto 0; max-width:none; text-shadow:0 2px 0 rgba(0,0,0,.18);
+}
 .hero p{max-width:620px; color:rgba(255,255,255,.92); font-size:16px; line-height:1.55; margin:18px auto 0}
 .hero p b{color:#fff; font-weight:700}
 .accent-link{color:var(--mb-yellow); font-weight:700; text-decoration:underline}
@@ -315,6 +320,16 @@ body{
   .panel{width:100%; flex:1 1 100%}
   .cell,.cell.open{width:24px;height:24px;font-size:14px}
   .app{gap:8px; flex-wrap:wrap}
+
+  /* Beginner (9x9) is the only board that fits a phone -- scale its cells to fill
+     the screen width for comfortable taps. Intermediate/Expert stay fixed-size and
+     scroll (too wide to fit). --bc caps at 38px so it doesn't balloon on tablets. */
+  .board[data-dif="beginner"]{ --bc:min(38px, calc((100vw - 54px) / 9)); }
+  .board[data-dif="beginner"] .cell,
+  .board[data-dif="beginner"] .cell.open{
+    box-sizing:border-box; width:var(--bc); height:var(--bc);
+    font-size:calc(var(--bc) * .5);
+  }
 }
 
 /* ===== Launch Week results window (modal) — Figma 5542:3546 ===== */
@@ -371,6 +386,15 @@ body{
 .res-cta-ico{font-size:16px}
 .res-cta-save{background:#ffcb5c; border-width:3px; font-weight:700; box-shadow:4px 4px 0 rgba(0,0,0,.15); justify-content:center; gap:12px}
 .res-cta-save:active{box-shadow:2px 2px 0 rgba(0,0,0,.15)}
+.startErr{color:#c0392b; font-weight:700; margin-top:8px}
+.startConsent{color:#7a7990; margin-top:12px; line-height:1.5}
+.startConsent a{color:#756df3; font-weight:600}
+/* Roomier, lighter typography for the start popup so the intro doesn't read dense. */
+#startOverlay .body{padding:20px}
+#startOverlay .body p{margin:0 0 16px; font-size:14px; line-height:1.6; font-weight:400; color:#3a3960}
+#startOverlay .body p b{color:#2e2a5e; font-weight:700}
+/* 16px keeps iOS Safari from zooming the page when the field is focused. */
+#startOverlay .field input{font-size:16px; padding:8px 10px}
 
 .reswin-footer{display:flex; align-items:center; justify-content:space-between;
   background:#2e2a5e; border-top:1px solid #fff; padding:11px 20px}
@@ -386,19 +410,4 @@ body{
   .res-title{font-size:24px}
   .score-box{font-size:52px; height:84px; max-width:none}
   .stat b{font-size:18px}
-}
-
-/* ===== SECURITY DISCLOSURE BANNER (credit: Nitzan Kletter / Daylight) ===== */
-.secbanner{
-  display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
-  background:var(--mb-navy); color:#fff; text-decoration:none;
-  font-family:'Poppins',"Segoe UI",sans-serif; font-size:13.5px; font-weight:500;
-  line-height:1.35; text-align:center; padding:9px 18px;
-}
-.secbanner:hover{background:#2c2a52}
-.secbanner-txt b{color:var(--mb-yellow); font-weight:700}
-.secbanner-arrow{color:var(--mb-yellow); font-weight:700}
-@media (max-width:560px){
-  .secbanner{font-size:12.5px; padding:8px 12px; gap:8px}
-  .secbanner-txt{flex-basis:100%}
 }
