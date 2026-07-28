@@ -122,10 +122,21 @@ async function ensureIdentity() {
    player can pick their name and have their email auto-filled. Stored only in
    localStorage -- never sent to other clients (emails stay off the wire). */
 function loadRoster() {
-  try { return JSON.parse(localStorage.getItem('msw_players') || '{}'); } catch { return {}; }
+  try {
+    const raw = JSON.parse(localStorage.getItem('msw_players') || '{}');
+    // Migrate the old name->email string form to { email, score }.
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) out[k] = (typeof v === 'string') ? { email: v, score: null } : v;
+    return out;
+  } catch { return {}; }
 }
-function rememberPlayer(name, email) {
-  const r = loadRoster(); r[name] = email;
+/* Save a player. Called at the popup (name+email, no score) and after each game
+   (with the score); keeps the player's best score so the fold-out can show it. */
+function rememberPlayer(name, email, score) {
+  const r = loadRoster();
+  const prev = r[name] || {};
+  const best = (score != null) ? Math.max(score, prev.score || 0) : (prev.score ?? null);
+  r[name] = { email: email || prev.email || '', score: best };
   try { localStorage.setItem('msw_players', JSON.stringify(r)); } catch {}
 }
 
@@ -142,21 +153,28 @@ function askPlayer() {
     const renderSuggest = () => {
       const f = n.value.trim().toLowerCase();
       const matches = names.filter(nm => nm.toLowerCase().includes(f));
-      sug.innerHTML = matches.map(nm => `<div class="ns-row" data-name="${escapeHtml(nm)}">${escapeHtml(nm)}</div>`).join('');
+      sug.innerHTML = matches.map(nm => {
+        const s = roster[nm].score;
+        const sc = (s != null) ? `<span class="ns-score">${Number(s).toLocaleString()}</span>` : '';
+        return `<div class="ns-row" data-name="${escapeHtml(nm)}">${escapeHtml(nm)}${sc}</div>`;
+      }).join('');
       sug.hidden = matches.length === 0;
     };
-    const pick = (nm) => { n.value = nm; if (roster[nm]) e.value = roster[nm]; sug.hidden = true; e.focus(); };
+    const pick = (nm) => { n.value = nm; if (roster[nm]) e.value = roster[nm].email; sug.hidden = true; e.focus(); };
 
     n.value = lastName; e.value = lastEmail; err.hidden = true; sug.hidden = true;
-    ov.classList.add('show');
-    n.focus(); n.select();
 
+    // Wire handlers BEFORE focusing so the initial autofocus shows the fold-out too.
     n.onfocus = renderSuggest;
     // Typing filters the list, and an exact name match auto-fills that player's email.
-    n.oninput = () => { renderSuggest(); const hit = roster[n.value.trim()]; if (hit) e.value = hit; };
+    n.oninput = () => { renderSuggest(); const hit = roster[n.value.trim()]; if (hit) e.value = hit.email; };
     n.onblur = () => setTimeout(() => { sug.hidden = true; }, 120);
     sug.onmousedown = (ev) => ev.preventDefault();   // keep the input focused so the tap registers
     sug.onclick = (ev) => { const row = ev.target.closest('.ns-row'); if (row) pick(row.dataset.name); };
+
+    ov.classList.add('show');
+    n.focus(); n.select();
+    renderSuggest();   // reveal saved players on open (self-hides when the roster is empty)
 
     const done = (val) => {
       ov.classList.remove('show');
@@ -440,6 +458,7 @@ async function submitSession(won) {
   if (result) {
     state.submitResult = result;
     if (result.claimToken) state.myToken = result.claimToken;  // highlight my row
+    rememberPlayer(handle, state.email, result.score);         // keep best score for the name fold-out
     showResults({ won: result.won, timeSeconds, score: result.score, rank: result.rank, onLeaderboard: result.onLeaderboard });
     if (result.onLeaderboard) loadLeaderboard();
   } else {
