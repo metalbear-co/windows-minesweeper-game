@@ -6,18 +6,18 @@
 <title>MetalBear Minesweeper — KubeCon + CloudNativeCon Japan, Yokohama</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="favicon.png">
-<meta name="description" content="Play MetalBear Minesweeper at our booth at KubeCon + CloudNativeCon Japan in Yokohama. Top the Expert leaderboard by the end of day two to win swag. Brought to you by mirrord.">
+<meta name="description" content="Play MetalBear Minesweeper at our booth at KubeCon + CloudNativeCon Japan in Yokohama. Top the leaderboard to win swag — prizes go out both days: 6pm day one and 3:30pm day two. Brought to you by mirrord.">
 <!-- Social share card (Open Graph + Twitter) -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://minesweeper.metalbear.com/">
 <meta property="og:title" content="MetalBear Minesweeper — KubeCon Japan">
-<meta property="og:description" content="Play at the MetalBear booth at KubeCon + CloudNativeCon Japan, Yokohama. Top the Expert leaderboard by the end of day two to win swag.">
+<meta property="og:description" content="Play at the MetalBear booth at KubeCon + CloudNativeCon Japan, Yokohama. Top the leaderboard to win swag — prizes go out both days: 6pm day one and 3:30pm day two.">
 <meta property="og:image" content="https://minesweeper.metalbear.com/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="663">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="MetalBear Minesweeper — KubeCon Japan">
-<meta name="twitter:description" content="Play at the MetalBear booth at KubeCon + CloudNativeCon Japan, Yokohama. Top the Expert leaderboard by the end of day two to win swag.">
+<meta name="twitter:description" content="Play at the MetalBear booth at KubeCon + CloudNativeCon Japan, Yokohama. Top the leaderboard to win swag — prizes go out both days: 6pm day one and 3:30pm day two.">
 <meta name="twitter:image" content="https://minesweeper.metalbear.com/og-image.png">
 <!-- PostHog analytics (project: mirrord). Captures pageviews + autocapture. -->
 <script>
@@ -49,8 +49,9 @@
       <a class="badge light" href="https://metalbear.com/" target="_blank" rel="noopener">★ KubeCon + CloudNativeCon Japan</a>
       <h1>MetalBear <span class="accent">Minesweeper</span></h1>
       <p class="jp-line" lang="ja">全力を尽くせ、ハイスコアを狙え</p>
-      <p>Play at the <b>MetalBear booth</b> in Yokohama. Set the top <b>Expert</b> score by the
-         end of day two and win an amazing prize — come find us at the booth to claim it.</p>
+      <p>Play at the <b>MetalBear booth</b> in Yokohama. Set the top score and win an amazing
+         prize — we're giving prizes out both days, at <b>6pm day one</b> and <b>3:30pm day two</b>.
+         Come find us at the booth to claim it.</p>
     </div>
 
     <!-- wavy connector -->
@@ -70,7 +71,7 @@
         <!-- GAME -->
         <div class="gameframe">
           <div class="hud">
-            <div class="led" id="mineCount">099</div>
+            <div class="led" id="mineCount">040</div>
             <div class="smiley" id="smiley" title="New game">🙂</div>
             <div class="led" id="timer">000</div>
           </div>
@@ -80,13 +81,7 @@
         <!-- SIDE PANEL -->
         <div class="panel">
           <div class="panelbox">
-            <h3>Difficulty</h3>
-            <div class="diftabs" id="diftabs">
-              <div class="diftab" data-d="beginner">Beginner</div>
-              <div class="diftab" data-d="intermediate">Inter.</div>
-              <div class="diftab active" data-d="expert">Expert</div>
-            </div>
-            <div class="small" id="difDesc">30x16 - 99 mines</div>
+            <div class="small" id="difDesc">16x16 - 40 mines</div>
             <input id="handle" maxlength="14" hidden>
             <div class="small" id="playingAs" style="margin-top:4px"></div>
             <div class="small" style="margin-top:4px">You'll enter your name &amp; email when you start. Mobile: tap = reveal, hold the <b>🚩 Flag</b> button to plant flags.</div>
@@ -94,7 +89,7 @@
           </div>
 
           <div class="panelbox lbbox">
-            <h3>🏆 Best scores -- <span id="lbDif">Expert</span></h3>
+            <h3>🏆 Best scores</h3>
             <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
           </div>
         </div>
@@ -109,10 +104,10 @@
       <div class="prizes-body">
         <span class="prizes-ico">🏆</span>
         <div class="prizes-txt">
-          <p><b>The prize is for Expert mode only.</b> Whoever holds the top <b>Expert</b> score when
-             the expo hall closes on <b>day two</b> wins an amazing prize. Beginner and Intermediate are
-             there to warm up on. Come to the <b>MetalBear booth</b> at the end of day two — we'll
-             announce the winner and hand over the prize there.</p>
+          <p>We're giving out prizes on both days. Whoever holds the top score at <b>6pm on day one</b>
+             and at <b>3:30pm on day two</b> each win an amazing prize. Come to the
+             <b>MetalBear booth</b> at those times — we'll announce the winner and hand over the
+             prize there.</p>
         </div>
       </div>
     </div>
@@ -127,7 +122,7 @@
       <p>We're at KubeCon + CloudNativeCon Japan all conference. Beat the board, grab some swag,
          and see what mirrord does to your test-against-staging loop.</p>
       <ul class="ticks">
-        <li><b>Top the Expert board</b> by the end of day two to win an amazing prize.</li>
+        <li><b>Top the board</b> at 6pm day one or 3:30pm day two to win an amazing prize.</li>
         <li><b>Live mirrord demos</b> at the booth — run local code against a real cluster.</li>
         <li><b>Meet the team</b> and talk shop about Kubernetes dev workflows.</li>
       </ul>
@@ -167,8 +162,8 @@
         <div class="tbtns"><div class="tbtn" id="startX">✕</div></div>
       </div>
       <div class="body">
-        <p>Enter your name and email to join the leaderboard. Top the <b>Expert</b> board by the
-           end of KubeCon Japan to win — if you're not at the booth, we'll email you.</p>
+        <p>Enter your name and email to join the leaderboard. Top the board at 6pm day one or
+           3:30pm day two to win — if you're not at the booth, we'll email you.</p>
         <div class="field name-field">
           <input id="startName" maxlength="14" placeholder="your name" autocomplete="off">
           <div class="name-suggest" id="nameSuggest" hidden></div>

@@ -51,16 +51,14 @@ function placeMinesFromSeed(w, h, mineCount, hexSeed, safeX, safeY) {
    Constants
    ============================================================ */
 const DIFFS = {
-  beginner:     { w: 9,  h: 9,  m: 10, label: 'Beginner',     desc: '9x9 - 10 mines' },
-  intermediate: { w: 16, h: 16, m: 40, label: 'Intermediate', desc: '16x16 - 40 mines' },
-  expert:       { w: 30, h: 16, m: 99, label: 'Expert',       desc: '30x16 - 99 mines' },
+  intermediate: { w: 16, h: 16, m: 40 },
 };
 
 /* ============================================================
    State
    ============================================================ */
 let state = {
-  dif: 'expert',
+  dif: 'intermediate',
   grid: [], w: 0, h: 0, mines: 0,
   started: false, over: false, win: false,
   flags: 0, revealed: 0,
@@ -96,7 +94,7 @@ function escapeHtml(s) {
    Board setup
    ============================================================ */
 
-/* The Expert board renders immediately on load; the start popup only appears when
+/* The board renders immediately on load; the start popup only appears when
    someone first tries to play (see the board tap handlers). It re-appears for every
    new game because newGame() clears state.identityOk. Pre-filled with the last entry
    so a repeat player just taps Start, while a new walk-up on the iPad types over it. */
@@ -508,7 +506,6 @@ function showResults(result) {
   const won = result.won;
   const timeSeconds = result.timeSeconds || state.time;
   const handle = getHandle() || 'anon';
-  const dlabel = label(state.dif);
   const safeTotal = state.w * state.h - state.mines;
   const revealed = state.revealed;
 
@@ -516,7 +513,7 @@ function showResults(result) {
   const emoji = won ? '🏆' : '💥';
   const rankPart = result.rank != null ? ` · Rank #${result.rank}` : '';
 
-  $('resTitle').textContent = `${emoji} Minesweeper · ${dlabel}${rankPart}`;
+  $('resTitle').textContent = `${emoji} Minesweeper${rankPart}`;
   $('resScore').textContent = score != null ? score.toLocaleString() : '…';
   $('resTime').textContent = `${timeSeconds}s`;
   $('resCleared').textContent = `${revealed}/${safeTotal}`;
@@ -536,9 +533,6 @@ function showResults(result) {
 
   $('overlay').classList.add('show');
 }
-
-/* Capitalised full difficulty name for the title (DIFFS.label is abbreviated). */
-function label(dif) { return dif.charAt(0).toUpperCase() + dif.slice(1); }
 
 function closeModal() { $('overlay').classList.remove('show'); }
 
@@ -629,19 +623,6 @@ $('flagToggle').addEventListener('click', () => {
   state.flagMode = !state.flagMode;
   $('flagToggle').textContent = '🚩 Flag mode: ' + (state.flagMode ? 'ON' : 'OFF');
   $('flagToggle').style.background = state.flagMode ? '#ffe08a' : '';
-});
-
-/* Difficulty tabs */
-document.querySelectorAll('.diftab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.diftab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    state.dif = tab.dataset.d;
-    $('difDesc').textContent = DIFFS[state.dif].desc;
-    $('lbDif').textContent = DIFFS[state.dif].label;
-    loadLeaderboard();
-    newGame();
-  });
 });
 
 /* CTA links */
