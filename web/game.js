@@ -51,16 +51,14 @@ function placeMinesFromSeed(w, h, mineCount, hexSeed, safeX, safeY) {
    Constants
    ============================================================ */
 const DIFFS = {
-  beginner:     { w: 9,  h: 9,  m: 10, label: 'Beginner',     desc: '9x9 - 10 mines' },
   intermediate: { w: 16, h: 16, m: 40, label: 'Intermediate', desc: '16x16 - 40 mines' },
-  expert:       { w: 30, h: 16, m: 99, label: 'Expert',       desc: '30x16 - 99 mines' },
 };
 
 /* ============================================================
    State
    ============================================================ */
 let state = {
-  dif: 'expert',
+  dif: 'intermediate',
   grid: [], w: 0, h: 0, mines: 0,
   started: false, over: false, win: false,
   flags: 0, revealed: 0,
@@ -96,7 +94,7 @@ function escapeHtml(s) {
    Board setup
    ============================================================ */
 
-/* The Expert board renders immediately on load; the start popup only appears when
+/* The Intermediate board renders immediately on load; the start popup only appears when
    someone first tries to play (see the board tap handlers). It re-appears for every
    new game because newGame() clears state.identityOk. Pre-filled with the last entry
    so a repeat player just taps Start, while a new walk-up on the iPad types over it. */

@@ -79,4 +79,4 @@ Every PR gets an isolated [mirrord Preview Environment](https://metalbear.com/mi
 
 - **Every session scores** (win or loss). Score = cells cleared, plus a completion + speed bonus on a full clear, weighted by difficulty (Beginner 1x, Intermediate 2x, Expert 3x). Higher is better.
 - **One running leaderboard per difficulty** for the whole event -- no daily reset. Each name appears once, keeping its highest score.
-- **Prizes** go to the top score in each category (Beginner, Intermediate, Expert). Winners claim by sharing their high-score image on LinkedIn tagging MetalBear, or posting it in the community Slack.
+- **Prizes** go to the top score on Intermediate (the only difficulty exposed in the UI). Winners claim by sharing their high-score image on LinkedIn tagging MetalBear, or posting it in the community Slack.
