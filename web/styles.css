@@ -183,13 +183,6 @@ body{
 .lbbox{display:flex; flex-direction:column}
 /* Hard-bounded scroll region -- fixed cap so the list never pushes the page down. */
 #leaderboard{max-height:300px; overflow-y:auto}
-.diftabs{display:flex; gap:4px; margin-bottom:6px}
-.diftab{
-  flex:1; text-align:center; font-size:11px; padding:4px 2px; cursor:pointer; background:var(--face);
-  border:2px solid; border-color:var(--hi) var(--dk) var(--dk) var(--hi);
-}
-.diftab.active{border-color:var(--dk) var(--hi) var(--hi) var(--dk); font-weight:700; background:var(--deep)}
-
 .field{display:flex; gap:6px; align-items:center; margin-top:6px}
 .field input{
   flex:1; font-family:"Tahoma",sans-serif; font-size:12px; padding:4px;
