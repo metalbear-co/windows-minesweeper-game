@@ -19,7 +19,7 @@ const PORT = Number(process.env.PORT ?? 3001);
 
 // Fixed identity for the running event -- keeps each name to one leaderboard row.
 // Bumping this string starts a fresh leaderboard (old scores live under the old key).
-const SEASON = "kubecon-japan-2026";
+const SEASON = "leaddev-nyc-2026";
 
 /* ---- CORS ---- */
 const DEV_ORIGINS = ["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:8080", "http://127.0.0.1:8080"];
@@ -147,7 +147,7 @@ app.post("/game/submit", async (c) => {
   if (typeof body.nameKey !== "string" || body.nameKey.length < 8) {
     return c.json({ error: "missing nameKey" }, 400);
   }
-  if ((await reserveName(redis, safeHandle, body.nameKey)) === "taken") {
+  if ((await reserveName(redis, SEASON, safeHandle, body.nameKey)) === "taken") {
     // Return the score so the player keeps it; game stays unused for a rename+retry.
     return c.json({ accepted: true, won, revealed, score, timeSeconds, rank: null, onLeaderboard: false, reason: "name_taken" });
   }
@@ -167,7 +167,7 @@ app.post("/game/submit", async (c) => {
   // Record on the running leaderboard (GT keeps the player's highest score).
   // SEASON is fixed for the whole event so a name maps to one row (no daily reset).
   const claimToken = signClaimToken(difficulty, SEASON, safeHandle);
-  const rank = await addScore(redis, difficulty, claimToken, safeHandle, score);
+  const rank = await addScore(redis, SEASON, difficulty, claimToken, safeHandle, score);
   const isLeader = rank === 1;
 
   // Store claim record
@@ -216,7 +216,7 @@ app.get("/leaderboard", async (c) => {
   const redis = getRedis();
 
   // Extract claimToken from myToken (myToken is the full claimToken)
-  const data = await getLb(redis, difficulty, myToken || undefined, 100);
+  const data = await getLb(redis, SEASON, difficulty, myToken || undefined, 100);
 
   return c.json({ difficulty, ...data });
 });
@@ -310,7 +310,7 @@ app.get("/admin/emails.csv", async (c) => {
 
   // Join with the Expert leaderboard (the prize board). Members are stored as
   // `{claimToken}:{handle}`, so map handle -> score (one entry per name).
-  const rawLb = await redis.zrevrange("lb:expert", 0, -1, "WITHSCORES");
+  const rawLb = await redis.zrevrange(`lb:${SEASON}:expert`, 0, -1, "WITHSCORES");
   const expertByName: Record<string, number> = {};
   for (let i = 0; i < rawLb.length; i += 2) {
     const member = rawLb[i];

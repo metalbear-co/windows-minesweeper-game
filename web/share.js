@@ -7,10 +7,10 @@ export function buildCaption(o) {
   const s = o.score != null ? `${o.score.toLocaleString()} pts` : null;
   if (o.won) {
     const rank = o.rank != null ? ` (ranked #${o.rank})` : '';
-    return `I scored ${s || `a ${o.timeSeconds}s clear`}${rank} on ${d} in MetalBear Minesweeper 🏆 — think you can beat me at the MetalBear booth? KubeCon Japan 🇯🇵 https://minesweeper.metalbear.com/ (brought to you by mirrord)`;
+    return `I scored ${s || `a ${o.timeSeconds}s clear`}${rank} on ${d} in MetalBear Minesweeper 🏆 — think you can beat me at the MetalBear booth? LeadDev NYC 🗽 https://minesweeper.metalbear.com/ (brought to you by mirrord)`;
   }
   const rank = o.rank != null ? `, ranked #${o.rank}` : '';
-  return `I scored ${s || `${o.revealed}/${o.safeTotal} cells`}${rank} on ${d} in MetalBear Minesweeper 💥 — can you do better? Find us at the MetalBear booth, KubeCon Japan 🇯🇵 https://minesweeper.metalbear.com/ (brought to you by mirrord)`;
+  return `I scored ${s || `${o.revealed}/${o.safeTotal} cells`}${rank} on ${d} in MetalBear Minesweeper 💥 — can you do better? Find us at the MetalBear booth, LeadDev NYC 🗽 https://minesweeper.metalbear.com/ (brought to you by mirrord)`;
 }
 
 export async function copyCaption(o) {
@@ -102,7 +102,7 @@ export function drawCard(canvas, o) {
   /* eyebrow pill (left-aligned with the title/score box at x=74) */
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 12px Unbounded, sans-serif'; tracking(ctx, 1);
-  const pillText = 'METALBEAR · KUBECON JAPAN';
+  const pillText = 'METALBEAR · LEADDEV NYC';
   const tw = ctx.measureText(pillText).width;
   const padX = 18, dot = 8, gap = 8, pillH = 30, pillW = padX * 2 + dot + gap + tw;
   const px = 74, py = 123;
@@ -169,7 +169,7 @@ export function drawCard(canvas, o) {
   const fy = 539 + (H - 7 - 539) / 2 + 1;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = C.goldSoft; ctx.font = 'bold 15px Tahoma, sans-serif'; ctx.textAlign = 'left';
-  ctx.fillText('MetalBear booth · KubeCon Japan 2026', 27, fy);
+  ctx.fillText('MetalBear booth · LeadDev NYC 2026', 27, fy);
   ctx.fillStyle = C.white; ctx.font = '16px Tahoma, sans-serif'; ctx.textAlign = 'right';
   ctx.fillText('metalbear.com', W - 27, fy);
 }

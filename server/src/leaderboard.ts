@@ -2,9 +2,11 @@
 import type { Redis } from "ioredis";
 import type { Difficulty } from "./game.js";
 
-// Single running leaderboard for the whole event -- no daily reset, no expiry.
-function lbKey(difficulty: Difficulty): string {
-  return `lb:${difficulty}`;
+// Scoped by season (see server.ts) so bumping that string actually starts a
+// fresh board, as its own comment claims -- an unscoped key would silently
+// carry one event's scores (and #1 leader) into the next.
+function lbKey(season: string, difficulty: Difficulty): string {
+  return `lb:${season}:${difficulty}`;
 }
 
 export interface LeaderboardEntry {
@@ -22,12 +24,13 @@ export interface LeaderboardEntry {
  */
 export async function addScore(
   redis: Redis,
+  season: string,
   difficulty: Difficulty,
   claimToken: string,
   handle: string,
   score: number
 ): Promise<number> {
-  const key = lbKey(difficulty);
+  const key = lbKey(season, difficulty);
   const member = `${claimToken}:${handle}`;
   // GT: update only if the new score beats the stored one; still adds new members.
   // No expiry -- this board runs for the whole event until we clear it manually.
@@ -43,11 +46,12 @@ export async function addScore(
  */
 export async function getLeaderboard(
   redis: Redis,
+  season: string,
   difficulty: Difficulty,
   myClaimToken?: string,
   limit = 10
 ): Promise<{ entries: LeaderboardEntry[] }> {
-  const key = lbKey(difficulty);
+  const key = lbKey(season, difficulty);
   // ZREVRANGE with WITHSCORES -- descending by score (highest first)
   const raw = await redis.zrevrange(key, 0, limit - 1, "WITHSCORES");
 
@@ -76,8 +80,8 @@ export async function getLeaderboard(
 /**
  * Check if a given claimToken is currently the #1 (lowest score).
  */
-export async function isLeader(redis: Redis, difficulty: Difficulty, claimToken: string): Promise<boolean> {
-  const key = lbKey(difficulty);
+export async function isLeader(redis: Redis, season: string, difficulty: Difficulty, claimToken: string): Promise<boolean> {
+  const key = lbKey(season, difficulty);
   const top = await redis.zrevrange(key, 0, 0);  // highest score
   if (!top.length) return false;
   return top[0].startsWith(claimToken + ":");
