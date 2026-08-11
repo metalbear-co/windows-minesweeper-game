@@ -23,6 +23,12 @@ export async function startGame(difficulty) {
   return apiFetch('POST', '/game/start', { difficulty });
 }
 
+// One real click, one call -- the server places mines on the first reveal and
+// only ever discloses the cells that click actually opened (see server/src/board.ts).
+export async function revealCell(gameId, x, y) {
+  return apiFetch('POST', '/game/reveal', { gameId, x, y });
+}
+
 export async function submitGame(payload) {
   return apiFetch('POST', '/game/submit', payload);
 }

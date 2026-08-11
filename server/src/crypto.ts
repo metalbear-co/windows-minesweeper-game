@@ -20,17 +20,6 @@ function timingSafeEqual64(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb);
 }
 
-/* ---- Seed signature ---- */
-
-/** Sign gameId + seed. Stored alongside the game so the client can't swap seeds. */
-export function signSeed(gameId: string, seed: string): string {
-  return hmacGame(`${gameId}:${seed}`);
-}
-
-export function verifySeed(gameId: string, seed: string, sig: string): boolean {
-  return timingSafeEqual64(hmacGame(`${gameId}:${seed}`), sig);
-}
-
 /* ---- Claim token ---- */
 // Format: base64url({difficulty}:{date}:{handle}).HMAC(GAME_SECRET)
 

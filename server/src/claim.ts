@@ -42,11 +42,11 @@ export async function getClaimStatus(
 ): Promise<{ found: boolean; isLeader: boolean; claimWindowOpen: boolean; resetInSeconds: number; claimed: boolean }> {
   const key = claimKey(claimToken);
   const rec = await redis.hgetall(key) as Partial<ClaimRecord>;
-  if (!rec || !rec.difficulty) {
+  if (!rec || !rec.difficulty || !rec.date) {
     return { found: false, isLeader: false, claimWindowOpen: false, resetInSeconds: 0, claimed: false };
   }
 
-  const leader = await isLeader(redis, rec.difficulty as Difficulty, claimToken);
+  const leader = await isLeader(redis, rec.date, rec.difficulty as Difficulty, claimToken);
 
   // Running event: the current leader can claim any time (we judge on Friday).
   return {
@@ -74,10 +74,10 @@ export async function executeClaim(
 ): Promise<"ok" | "already_claimed" | "not_leader" | "window_closed" | "not_found"> {
   const key = claimKey(claimToken);
   const rec = await redis.hgetall(key) as Partial<ClaimRecord>;
-  if (!rec || !rec.difficulty) return "not_found";
+  if (!rec || !rec.difficulty || !rec.date) return "not_found";
   if (rec.claimed === "1") return "already_claimed";
 
-  const leader = await isLeader(redis, rec.difficulty as Difficulty, claimToken);
+  const leader = await isLeader(redis, rec.date, rec.difficulty as Difficulty, claimToken);
   if (!leader) return "not_leader";
 
   // Atomic: use HSETNX on the claimed field to avoid races

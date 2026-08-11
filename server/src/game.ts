@@ -1,4 +1,5 @@
-/* Game logic: board construction + replay verifier */
+/* Game logic: pure board math. No Redis here -- see board.ts for the
+   stateful, per-game Redis operations built on top of these functions. */
 import { placeMinesFromSeed } from "./prng.js";
 
 export type Difficulty = "beginner" | "intermediate" | "expert";
@@ -16,160 +17,66 @@ export const DIFFS: Record<Difficulty, DiffConfig> = {
   expert:       { w: 30, h: 16, m: 99, minTimeSeconds: 15 },
 };
 
-// Tolerance for the server-measured elapsed-time check: absorbs clock rounding
-// and network latency without giving a cheater a meaningful head start.
-const CLOCK_SKEW_SECONDS = 2;
+export interface RevealedCell { x: number; y: number; n: number; }
+export interface Point { x: number; y: number; }
 
-export interface Move {
-  type: "reveal" | "flag" | "unflag";
-  x: number;
-  y: number;
-  t: number; // ms since first reveal
+/**
+ * Mine layout as a row-major '0'/'1' bitstring -- compact enough to store as a
+ * single Redis hash field, one char per cell (max 480 cells on Expert).
+ */
+export function buildMinesBits(difficulty: Difficulty, hexSeed: string, safeX: number, safeY: number): string {
+  const { w, h, m } = DIFFS[difficulty];
+  const mines = placeMinesFromSeed(w, h, m, hexSeed, safeX, safeY);
+  let bits = "";
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) bits += mines[y][x] ? "1" : "0";
+  return bits;
 }
 
-export interface VerifyResult {
-  ok: boolean;         // replay is structurally valid and time-consistent
-  reason?: string;
-  won: boolean;        // true only if every safe cell was revealed and no mine hit
-  revealed: number;    // safe cells revealed (authoritative -- from the replay)
-}
-
-/* ---- Internal cell type ---- */
-interface Cell {
-  mine: boolean;
-  open: boolean;
-  flag: boolean;
-  n: number;
-}
-
-function buildBoard(w: number, h: number, mines: boolean[][]): Cell[][] {
-  const grid: Cell[][] = Array.from({ length: h }, (_, y) =>
-    Array.from({ length: w }, (_, x) => ({
-      mine: mines[y][x],
-      open: false,
-      flag: false,
-      n: 0,
-    }))
-  );
-  // Compute neighbor counts
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (grid[y][x].mine) continue;
-      let n = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < w && ny >= 0 && ny < h && grid[ny][nx].mine) n++;
-      }
-      grid[y][x].n = n;
-    }
+export function bitsToPoints(bits: string, w: number, h: number): Point[] {
+  const out: Point[] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (bits[y * w + x] === "1") out.push({ x, y });
   }
-  return grid;
+  return out;
 }
 
-function floodReveal(grid: Cell[][], w: number, h: number, startX: number, startY: number): number {
-  let revealed = 0;
-  const stack: [number, number][] = [[startX, startY]];
-  while (stack.length) {
-    const [cx, cy] = stack.pop()!;
-    const c = grid[cy][cx];
-    if (c.open || c.flag || c.mine) continue;
-    c.open = true;
-    revealed++;
-    if (c.n === 0) {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = cx + dx, ny = cy + dy;
-        if (nx >= 0 && nx < w && ny >= 0 && ny < h && !grid[ny][nx].open) {
-          stack.push([nx, ny]);
-        }
-      }
-    }
+function neighborMineCount(minesBits: string, w: number, h: number, x: number, y: number): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if (dx === 0 && dy === 0) continue;
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && nx < w && ny >= 0 && ny < h && minesBits[ny * w + nx] === "1") n++;
   }
-  return revealed;
+  return n;
 }
 
 /**
- * Replay the client's move list against the seeded board.
- * `ok` means the replay is valid and time-consistent (a legitimate session,
- * win OR loss). `won`/`revealed` describe the outcome for scoring.
- *
- * `elapsedSeconds`, when provided, is the wall-clock time the *server* measured
- * between issuing the seed and receiving the submission. Because the claimed
- * play time is measured from the first reveal -- which can only happen after we
- * handed out the seed -- a legitimate run always burns at least that much real
- * time. When the server measured less, the client is lying about time (e.g. it
- * reconstructed the board from the public seed offline and submitted instantly).
- * Omit it to skip the check (e.g. unit tests, or games issued before this field
- * was recorded).
+ * Flood-reveal from (x,y): classic zero-cell flood fill, run authoritatively
+ * against the server-held mine layout. Returns the updated `open` bitstring
+ * plus only the cells newly opened by this single click -- the caller (a
+ * player's real click, one at a time) never learns about cells it hasn't
+ * earned by actually revealing them or their zero-neighbors.
  */
-export function replayVerify(
-  difficulty: Difficulty,
-  hexSeed: string,
-  moves: Move[],
-  claimedTimeSeconds: number,
-  elapsedSeconds?: number
-): VerifyResult {
-  const fail = (reason: string): VerifyResult => ({ ok: false, reason, won: false, revealed: 0 });
-
-  const conf = DIFFS[difficulty];
-  if (!conf) return fail("unknown difficulty");
-
-  if (!Array.isArray(moves) || moves.length === 0) return fail("no moves");
-
-  // Find first reveal -- determines mine placement
-  const firstReveal = moves.find(m => m.type === "reveal");
-  if (!firstReveal) return fail("no reveal move");
-  const safeX = firstReveal.x, safeY = firstReveal.y;
-  if (safeX < 0 || safeX >= conf.w || safeY < 0 || safeY >= conf.h) return fail("first reveal out of bounds");
-
-  const mineGrid = placeMinesFromSeed(conf.w, conf.h, conf.m, hexSeed, safeX, safeY);
-  const grid = buildBoard(conf.w, conf.h, mineGrid);
-  if (grid[safeY][safeX].mine) return fail("mine placed on safe cell (seed bug)");
-
-  let totalRevealed = 0;
-  const totalSafe = conf.w * conf.h - conf.m;
-  let lastMoveMs = 0;
-  let hitMine = false;
-
-  for (const move of moves) {
-    if (move.x < 0 || move.x >= conf.w || move.y < 0 || move.y >= conf.h) return fail("move out of bounds");
-    const cell = grid[move.y][move.x];
-    if (move.t > lastMoveMs) lastMoveMs = move.t;
-
-    if (move.type === "reveal") {
-      if (cell.mine) { hitMine = true; break; }  // loss -- stop replaying at the boom
-      if (!cell.open) totalRevealed += floodReveal(grid, conf.w, conf.h, move.x, move.y);
-    } else if (move.type === "flag") {
-      if (!cell.open) cell.flag = true;
-    } else if (move.type === "unflag") {
-      cell.flag = false;
+export function floodReveal(minesBits: string, openBits: string, w: number, h: number, x: number, y: number): { openBits: string; newly: RevealedCell[] } {
+  const open = openBits.split("");
+  const newly: RevealedCell[] = [];
+  const stack: [number, number][] = [[x, y]];
+  while (stack.length) {
+    const [cx, cy] = stack.pop()!;
+    const idx = cy * w + cx;
+    if (open[idx] === "1" || minesBits[idx] === "1") continue;
+    open[idx] = "1";
+    const n = neighborMineCount(minesBits, w, h, cx, cy);
+    newly.push({ x: cx, y: cy, n });
+    if (n === 0) {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (nx >= 0 && nx < w && ny >= 0 && ny < h && open[ny * w + nx] !== "1") stack.push([nx, ny]);
+      }
     }
   }
-
-  const won = !hitMine && totalRevealed === totalSafe;
-
-  // Claimed time must track the move timestamps (blocks inflating/deflating time).
-  const lastMoveSecs = lastMoveMs / 1000;
-  if (Math.abs(claimedTimeSeconds - lastMoveSecs) > 3) {
-    return { ok: false, won: false, revealed: totalRevealed,
-      reason: `claimed time ${claimedTimeSeconds}s does not match move timestamps (last move at ${lastMoveSecs.toFixed(1)}s)` };
-  }
-  // Server-authoritative clock: the claimed play time can't exceed the real
-  // wall-clock time the server saw pass since it issued the seed. This is what
-  // kills the "solve offline from the public seed, submit instantly" attack --
-  // client-supplied move timestamps alone can't be trusted for this.
-  if (elapsedSeconds != null && claimedTimeSeconds > elapsedSeconds + CLOCK_SKEW_SECONDS) {
-    return { ok: false, won: false, revealed: totalRevealed,
-      reason: `claimed time ${claimedTimeSeconds}s exceeds server-measured elapsed ${elapsedSeconds.toFixed(1)}s` };
-  }
-  // A *win* claimed impossibly fast is rejected; a fast loss is legitimate.
-  if (won && claimedTimeSeconds < conf.minTimeSeconds) {
-    return { ok: false, won: false, revealed: totalRevealed,
-      reason: `time ${claimedTimeSeconds}s too fast (min ${conf.minTimeSeconds}s)` };
-  }
-
-  return { ok: true, won, revealed: totalRevealed };
+  return { openBits: open.join(""), newly };
 }
 
 /* Difficulty weight -- harder boards are worth more per cell and per bonus. */

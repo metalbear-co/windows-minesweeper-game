@@ -5,11 +5,13 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { v4 as uuidv4 } from "uuid";
 import { getRedis } from "./redis.js";
-import { generateSeed, signSeed, verifySeed, signClaimToken, verifyClaimToken, signShareToken } from "./crypto.js";
-import { replayVerify, scoreSession, DIFFS, type Difficulty, type Move } from "./game.js";
+import { signClaimToken, verifyClaimToken, signShareToken } from "./crypto.js";
+import { scoreSession, DIFFS, type Difficulty } from "./game.js";
+import { createGame, revealCell, readFinishedGame, isUsed, markUsed } from "./board.js";
 import { addScore, getLeaderboard as getLb } from "./leaderboard.js";
 import { storeClaim, getClaimStatus, executeClaim } from "./claim.js";
 import { reserveName } from "./names.js";
+import { resolveClientIp } from "./ip.js";
 
 const app = new Hono();
 
@@ -17,7 +19,7 @@ const PORT = Number(process.env.PORT ?? 3001);
 
 // Fixed identity for the running event -- keeps each name to one leaderboard row.
 // Bumping this string starts a fresh leaderboard (old scores live under the old key).
-const SEASON = "kubecon-japan-2026";
+const SEASON = "leaddev-nyc-2026";
 
 /* ---- CORS ---- */
 const DEV_ORIGINS = ["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:8080", "http://127.0.0.1:8080"];
@@ -49,10 +51,7 @@ async function checkRateLimit(ip: string): Promise<boolean> {
 }
 
 function getIp(c: Context): string {
-  // Trust X-Forwarded-For when behind a proxy; fall back to socket address.
-  const xff = c.req.header("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return "unknown";
+  return resolveClientIp(c.req.header("cf-connecting-ip"), c.req.header("x-forwarded-for"));
 }
 
 /* ---- POST /game/start ---- */
@@ -66,88 +65,74 @@ app.post("/game/start", async (c) => {
 
   const redis = getRedis();
   const gameId = uuidv4();
-  const seed = generateSeed();
-  const seedSig = signSeed(gameId, seed);
+  await createGame(redis, gameId, difficulty);
 
-  // Store with 24h TTL. Leave `used` unset so submit's hsetnx(used) is the
-  // atomic single-submission guard (hsetnx only sets when the field is absent).
-  await redis.hset(`game:${gameId}`, { difficulty, seed, seedSig, issuedAt: Date.now().toString() });
-  await redis.expire(`game:${gameId}`, 24 * 60 * 60);
-
+  // No mine layout is generated (or handed out) yet -- see board.ts. It's
+  // created on the first /game/reveal, safe-zoned around that click.
   return c.json({
     gameId,
-    seed,
-    seedSig,
     serverTimeUTC: Math.floor(Date.now() / 1000),
   });
 });
 
-/* ---- POST /game/submit ---- */
-app.post("/game/submit", async (c) => {
-  const body = await c.req.json().catch(() => null) as null | {
-    gameId?: string;
-    seed?: string;
-    seedSig?: string;
-    difficulty?: string;
-    moves?: Move[];
-    handle?: string;
-    nameKey?: string;
-    timeSeconds?: number;
-    email?: string;
-  };
-
-  if (!body) return c.json({ error: "bad request" }, 400);
-
-  const { gameId, seed, seedSig, difficulty, moves, handle, timeSeconds } = body;
-
-  // Basic field validation
-  if (!gameId || !seed || !seedSig || !difficulty || !Array.isArray(moves) || typeof timeSeconds !== "number") {
+/* ---- POST /game/reveal ----
+   One real click, one call. This is what makes the board server-authoritative:
+   a caller only ever learns the cells a click actually opened, never the full
+   layout up front, so there's nothing to solve offline. */
+app.post("/game/reveal", async (c) => {
+  const body = await c.req.json().catch(() => null) as null | { gameId?: string; x?: number; y?: number };
+  if (!body || !body.gameId || typeof body.x !== "number" || typeof body.y !== "number") {
     return c.json({ error: "missing required fields" }, 400);
-  }
-  if (!DIFFS[difficulty as Difficulty]) {
-    return c.json({ error: "invalid difficulty" }, 400);
   }
 
   const redis = getRedis();
-
-  // Verify seedSig
-  if (!verifySeed(gameId, seed, seedSig)) {
-    return c.json({ error: "invalid seed signature" }, 403);
+  const result = await revealCell(redis, body.gameId, body.x, body.y);
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.error.startsWith("game not found") ? 404 : 400);
   }
+  return c.json(result);
+});
 
-  // Fetch game record
-  const gameKey = `game:${gameId}`;
-  const gameRec = await redis.hgetall(gameKey) as Partial<{ difficulty: string; seed: string; seedSig: string; used: string; issuedAt: string }>;
-  if (!gameRec || !gameRec.seed) {
-    return c.json({ error: "game not found or expired" }, 404);
-  }
-  if (gameRec.used === "1") {
+/* ---- POST /game/submit ----
+   No moves/seed/timing fields anymore -- the outcome (won, revealed, timeSeconds)
+   is read straight out of the server-tracked game record built up by /game/reveal
+   calls, so there's nothing here for a client to lie about. */
+app.post("/game/submit", async (c) => {
+  const body = await c.req.json().catch(() => null) as null | {
+    gameId?: string;
+    handle?: string;
+    nameKey?: string;
+    email?: string;
+  };
+
+  if (!body || !body.gameId) return c.json({ error: "bad request" }, 400);
+  const { gameId, handle } = body;
+
+  const redis = getRedis();
+
+  if (await isUsed(redis, gameId)) {
     return c.json({ error: "game already submitted" }, 409);
   }
-  // Verify seed matches what server originally issued
-  if (gameRec.seed !== seed || gameRec.seedSig !== seedSig || gameRec.difficulty !== difficulty) {
-    return c.json({ error: "seed mismatch" }, 403);
+
+  const finalized = await readFinishedGame(redis, gameId);
+  if (!finalized.ok) return c.json({ error: finalized.error }, 404);
+
+  // NOTE: we score BEFORE marking the game used, so a submission that is
+  // rejected for a missing/taken name can be retried under a different name.
+  // The single-use guard (markUsed) only fires once we actually finalise.
+  const { difficulty, won, revealed, timeSeconds } = finalized.game;
+  const conf = DIFFS[difficulty];
+
+  // A *win* claimed impossibly fast (sub-floor real elapsed time) is rejected;
+  // a fast loss is legitimate. Both firstRevealAt and finishedAt are server
+  // timestamps from real requests, so this now guards raw request pacing
+  // rather than a client-supplied claim.
+  if (won && timeSeconds < conf.minTimeSeconds) {
+    await markUsed(redis, gameId);
+    return c.json({ accepted: false, reason: `time ${timeSeconds}s too fast (min ${conf.minTimeSeconds}s)` }, 422);
   }
 
-  // NOTE: we verify + score BEFORE marking the game used, so a submission that
-  // is rejected for a missing/taken name can be retried under a different name.
-  // The single-use guard (hsetnx used) only fires once we actually finalise.
-
-  // Wall-clock elapsed since we issued the seed, measured server-side. Games
-  // issued before this field was recorded fall back to undefined (check skipped).
-  const issuedAt = Number(gameRec.issuedAt);
-  const elapsedSeconds = Number.isFinite(issuedAt) ? (Date.now() - issuedAt) / 1000 : undefined;
-
-  // Replay verify (accepts wins and losses; rejects only tampered/invalid replays)
-  const verification = replayVerify(difficulty as Difficulty, seed, moves, timeSeconds, elapsedSeconds);
-  if (!verification.ok) {
-    // Consume the game so a tampered replay can't be re-probed.
-    await redis.hsetnx(gameKey, "used", "1");
-    return c.json({ accepted: false, reason: verification.reason }, 422);
-  }
-
-  const { won, revealed } = verification;
-  const score = scoreSession(difficulty as Difficulty, won, revealed, timeSeconds);
+  const score = scoreSession(difficulty, won, revealed, timeSeconds);
 
   // Sanitise handle -- empty string means "no name given".
   const safeHandle = sanitiseHandle(handle);
@@ -162,7 +147,7 @@ app.post("/game/submit", async (c) => {
   if (typeof body.nameKey !== "string" || body.nameKey.length < 8) {
     return c.json({ error: "missing nameKey" }, 400);
   }
-  if ((await reserveName(redis, safeHandle, body.nameKey)) === "taken") {
+  if ((await reserveName(redis, SEASON, safeHandle, body.nameKey)) === "taken") {
     // Return the score so the player keeps it; game stays unused for a rename+retry.
     return c.json({ accepted: true, won, revealed, score, timeSeconds, rank: null, onLeaderboard: false, reason: "name_taken" });
   }
@@ -175,15 +160,14 @@ app.post("/game/submit", async (c) => {
   }
 
   // Finalise: consume the game exactly once now that the name is settled.
-  const set = await redis.hsetnx(gameKey, "used", "1");
-  if (!set) {
+  if (!(await markUsed(redis, gameId))) {
     return c.json({ error: "game already submitted" }, 409);
   }
 
   // Record on the running leaderboard (GT keeps the player's highest score).
   // SEASON is fixed for the whole event so a name maps to one row (no daily reset).
   const claimToken = signClaimToken(difficulty, SEASON, safeHandle);
-  const rank = await addScore(redis, difficulty as Difficulty, claimToken, safeHandle, score);
+  const rank = await addScore(redis, SEASON, difficulty, claimToken, safeHandle, score);
   const isLeader = rank === 1;
 
   // Store claim record
@@ -201,7 +185,7 @@ app.post("/game/submit", async (c) => {
   const shareToken = signShareToken({
     handle: safeHandle,
     timeSeconds,
-    difficulty: difficulty as Difficulty,
+    difficulty,
     isWinner: won,
     url: "minesweeper.metalbear.com",
   });
@@ -232,7 +216,7 @@ app.get("/leaderboard", async (c) => {
   const redis = getRedis();
 
   // Extract claimToken from myToken (myToken is the full claimToken)
-  const data = await getLb(redis, difficulty, myToken || undefined, 100);
+  const data = await getLb(redis, SEASON, difficulty, myToken || undefined, 100);
 
   return c.json({ difficulty, ...data });
 });
@@ -326,7 +310,7 @@ app.get("/admin/emails.csv", async (c) => {
 
   // Join with the Expert leaderboard (the prize board). Members are stored as
   // `{claimToken}:{handle}`, so map handle -> score (one entry per name).
-  const rawLb = await redis.zrevrange("lb:expert", 0, -1, "WITHSCORES");
+  const rawLb = await redis.zrevrange(`lb:${SEASON}:expert`, 0, -1, "WITHSCORES");
   const expertByName: Record<string, number> = {};
   for (let i = 0; i < rawLb.length; i += 2) {
     const member = rawLb[i];

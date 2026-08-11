@@ -53,11 +53,6 @@ body{
   font-size:clamp(34px,5vw,64px); line-height:1.04; margin:20px 0 0; letter-spacing:-1px;
 }
 .hero h1 .accent, .accent{color:var(--mb-yellow)}
-.hero .jp-line{
-  font-family:'Unbounded',sans-serif; font-weight:700; color:#fff;
-  font-size:clamp(20px,3vw,34px); line-height:1.2; letter-spacing:1px;
-  margin:14px auto 0; max-width:none; text-shadow:0 2px 0 rgba(0,0,0,.18);
-}
 .hero p{max-width:620px; color:rgba(255,255,255,.92); font-size:16px; line-height:1.55; margin:18px auto 0}
 .hero p b{color:#fff; font-weight:700}
 .accent-link{color:var(--mb-yellow); font-weight:700; text-decoration:underline}
