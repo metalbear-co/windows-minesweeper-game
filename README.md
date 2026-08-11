@@ -51,7 +51,13 @@ npm install
 npm test
 ```
 
-Tests need no Redis or running server -- they cover the replay verifier, the scoring function, and token signing in isolation.
+Tests need no Redis or running server -- they cover the board state machine, the
+scoring function, and token signing in isolation (Redis is faked, see
+`server/test/board.test.ts`).
+
+`timing-integrity.test.mjs` (repo root) is a separate live-server smoke test --
+point it at a running local/staging instance (never production) to confirm the
+board stays server-authoritative end to end: `node timing-integrity.test.mjs`.
 
 ## Developing against the cluster with mirrord
 
@@ -68,12 +74,18 @@ Every PR gets an isolated [mirrord Preview Environment](https://metalbear.com/mi
 
 ## How the game works
 
-1. Browser loads -> fetches a seed from `POST /game/start`.
-2. First click -> mines placed client-side with a mulberry32 PRNG seeded from the server seed.
-3. Moves recorded as `{type, x, y, t}` where `t` = ms since first reveal.
-4. Game over (win or loss) -> `POST /game/submit` with the move list.
-5. Server replays the moves against the same seeded board to verify the session and compute the score authoritatively.
-6. Score added to a Redis sorted set (`ZADD GT`, so each name keeps only its best); rank returned.
+The board is server-authoritative -- the server never hands out the mine layout,
+so there's nothing to solve offline from a public seed (see `server/src/board.ts`).
+
+1. Browser loads -> `POST /game/start` gets back a bare `gameId`, no board data.
+2. Every click -> `POST /game/reveal {gameId, x, y}`. The server places mines on
+   the very first call (safe zone centred on that click) and replies with only
+   the cells that click actually opened -- never the rest of the board.
+3. Game over (win or loss) -> `POST /game/submit {gameId, handle, ...}`. The
+   server already knows the outcome and elapsed time from its own tracked
+   reveals and timestamps, so there's no client-supplied score, time, or move
+   data left to trust.
+4. Score added to a Redis sorted set (`ZADD GT`, so each name keeps only its best); rank returned.
 
 ## Scoring & leaderboard
 

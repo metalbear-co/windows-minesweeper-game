@@ -1,51 +1,11 @@
 /* MetalBear Minesweeper -- game engine + API integration
    Core game logic preserved exactly from prototype.
-   Added: seeded board (mulberry32), move tracking, real API calls.
+   The board is server-authoritative: mines are placed server-side on the first
+   reveal and disclosed only cell-by-cell as real clicks earn them (see
+   server/src/board.ts) -- there's no seed handed to the client to solve offline.
 */
-import { startGame, submitGame, getLeaderboard } from './api.js';
+import { startGame, submitGame, getLeaderboard, revealCell as apiReveal } from './api.js';
 import { downloadImage } from './share.js';
-
-/* ============================================================
-   PRNG -- mulberry32 (must be bit-for-bit identical to server/src/prng.ts)
-   ============================================================ */
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function() {
-    a = (a + 0x6D2B79F5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 0x100000000;
-  };
-}
-
-function seedToUint32(hexSeed) {
-  return parseInt(hexSeed.slice(0, 8), 16);
-}
-
-/* Mine placement: Fisher-Yates shuffle of non-safe cells, take first mineCount.
-   Safe zone = 3x3 around first click. */
-function placeMinesFromSeed(w, h, mineCount, hexSeed, safeX, safeY) {
-  const prng = mulberry32(seedToUint32(hexSeed));
-  const safe = new Set();
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-    const nx = safeX + dx, ny = safeY + dy;
-    if (nx >= 0 && nx < w && ny >= 0 && ny < h) safe.add(`${nx},${ny}`);
-  }
-  const candidates = [];
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (!safe.has(`${x},${y}`)) candidates.push([x, y]);
-  }
-  for (let i = candidates.length - 1; i > 0; i--) {
-    const j = Math.floor(prng() * (i + 1));
-    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-  }
-  const mines = Array.from({ length: h }, () => new Array(w).fill(false));
-  for (let i = 0; i < mineCount; i++) {
-    const [x, y] = candidates[i];
-    mines[y][x] = true;
-  }
-  return mines;
-}
 
 /* ============================================================
    Constants
@@ -65,10 +25,12 @@ let state = {
   time: 0, timerId: null,
   placed: false, flagMode: false,
   // server-issued values
-  gameId: null, seed: null, seedSig: null, serverTimeUTC: null,
-  // move tracking: [{type, x, y, t}] where t = ms since first reveal
-  moves: [],
-  firstRevealAt: null,
+  gameId: null, serverTimeUTC: null,
+  // true once a reveal has actually round-tripped to the server for this game;
+  // false means we've fallen back to a local, unscored board (server unreachable).
+  online: false,
+  // guards against overlapping /game/reveal calls from a double-click
+  pending: false,
   // result from /game/submit
   submitResult: null,
   // leaderboard data
@@ -209,9 +171,9 @@ async function newGame() {
   state.w = d.w; state.h = d.h; state.mines = d.m;
   state.grid = []; state.started = false; state.over = false; state.win = false;
   state.flags = 0; state.revealed = 0; state.time = 0; state.placed = false;
-  state.moves = []; state.firstRevealAt = null; state.submitResult = null;
+  state.submitResult = null; state.pending = false; state.online = false;
   clearInterval(state.timerId); state.timerId = null;
-  state.gameId = null; state.seed = null; state.seedSig = null; state.serverTimeUTC = null;
+  state.gameId = null; state.serverTimeUTC = null;
 
   $('smiley').textContent = '🙂';
   $('timer').textContent = '000';
@@ -226,17 +188,19 @@ async function newGame() {
   }
   renderBoard();
 
-  // Fetch seed from server in background, so it's ready before first click
+  // Fetch a gameId from server in background, so it's ready before first click.
+  // No board data comes back -- the server places mines on the first /game/reveal
+  // and only ever discloses what that click actually opened.
   try {
     const data = await startGame(state.dif);
     state.gameId = data.gameId;
-    state.seed = data.seed;
-    state.seedSig = data.seedSig;
     state.serverTimeUTC = data.serverTimeUTC;
   } catch (err) {
-    console.warn('Could not fetch game seed from server:', err);
-    // ponytail: fall back to random play so game is never blocked on server
-    state.seed = null;
+    console.warn('Could not start a game with the server:', err);
+    // ponytail: fall back to local random play so the game is never blocked on
+    // the server -- this board is never submittable (no gameId), so it's not
+    // a trust boundary, just a booth-WiFi resilience measure.
+    state.gameId = null;
   }
 }
 
@@ -252,30 +216,22 @@ function renderBoard() {
   }
 }
 
-function placeMines(safeX, safeY) {
-  if (state.seed) {
-    // Seeded placement: deterministic, same as server verifier
-    const mineGrid = placeMinesFromSeed(state.w, state.h, state.mines, state.seed, safeX, safeY);
-    for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-      state.grid[y][x].mine = mineGrid[y][x];
-    }
-  } else {
-    // ponytail: unseeded fallback when server is unreachable -- score won't be submittable
-    const d = DIFFS[state.dif];
-    const safe = new Set();
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      safe.add((safeY + dy) + '_' + (safeX + dx));
-    }
-    let placed = 0;
-    while (placed < d.m) {
-      const x = Math.floor(Math.random() * state.w), y = Math.floor(Math.random() * state.h);
-      if (state.grid[y][x].mine) continue;
-      if (safe.has(y + '_' + x)) continue;
-      state.grid[y][x].mine = true; placed++;
-    }
+// ponytail: local-only fallback board for when /game/start couldn't reach the
+// server (no gameId => reveal() never calls the API => never submittable, so a
+// client-random layout here isn't a trust boundary, just booth-WiFi resilience).
+function placeMinesLocal(safeX, safeY) {
+  const d = DIFFS[state.dif];
+  const safe = new Set();
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    safe.add((safeY + dy) + '_' + (safeX + dx));
   }
-
-  // Compute neighbor counts
+  let placed = 0;
+  while (placed < d.m) {
+    const x = Math.floor(Math.random() * state.w), y = Math.floor(Math.random() * state.h);
+    if (state.grid[y][x].mine) continue;
+    if (safe.has(y + '_' + x)) continue;
+    state.grid[y][x].mine = true; placed++;
+  }
   for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
     if (state.grid[y][x].mine) continue;
     let n = 0;
@@ -309,31 +265,65 @@ function startTimer() {
   }, 1000);
 }
 
-function nowMs() { return Date.now(); }
-
-function recordMove(type, x, y) {
-  const t = state.firstRevealAt !== null ? nowMs() - state.firstRevealAt : 0;
-  state.moves.push({ type, x, y, t });
-}
-
-function reveal(x, y) {
-  if (state.over) return;
+/* Reveal is a real click, one at a time. When we have a gameId, the server is
+   the sole authority: it places mines on the very first call and only ever
+   tells us what THIS click opened -- never the rest of the board. Without a
+   gameId (offline fallback) we fall back to a local, unscored board. */
+async function reveal(x, y) {
+  if (state.over || state.pending) return;
   const cell = state.grid[y][x];
   if (cell.open || cell.flag) return;
-  if (!state.placed) {
-    // First click: plant mines, start clock
-    placeMines(x, y);
-    state.started = true;
-    state.firstRevealAt = nowMs();
-    startTimer();
+
+  if (!state.gameId) {
+    if (!state.placed) { placeMinesLocal(x, y); state.started = true; startTimer(); }
+    if (cell.mine) { finishLoss(x, y); return; }
+    floodRevealLocal(x, y);
+    if (state.revealed === state.w * state.h - state.mines) finishWin();
+    return;
   }
-  recordMove('reveal', x, y);
-  if (cell.mine) { boom(x, y); return; }
-  floodReveal(x, y);
-  checkWin();
+
+  state.pending = true;
+  let resp;
+  try {
+    resp = await apiReveal(state.gameId, x, y);
+  } catch (err) {
+    console.warn('reveal failed:', err);
+    state.pending = false;
+    return; // network hiccup -- the cell just stays closed, player can click again
+  }
+  state.pending = false;
+  state.online = true;
+
+  if (!state.placed) { state.placed = true; state.started = true; startTimer(); }
+
+  if (resp.hitMine) {
+    markMines(resp.mines);
+    finishLoss(x, y);
+    return;
+  }
+
+  applyRevealed(resp.newly);
+  if (resp.won) { markMines(resp.mines); finishWin(); }
 }
 
-function floodReveal(x, y) {
+/* Apply cells the server actually opened for this click -- x/y/n as returned,
+   never anything the player hasn't earned by clicking. */
+function applyRevealed(cells) {
+  for (const { x, y, n } of cells) {
+    const c = state.grid[y][x];
+    if (c.open) continue;
+    c.open = true; c.n = n; state.revealed++;
+    const el = cellEl(x, y); el.classList.add('open'); el.classList.remove('flag');
+    if (n > 0) { el.textContent = n; el.classList.add('n' + n); } else { el.textContent = ''; }
+  }
+}
+
+function markMines(points) {
+  for (const { x, y } of points) state.grid[y][x].mine = true;
+}
+
+// Offline-fallback-only flood fill (mirrors applyRevealed for a locally-known board).
+function floodRevealLocal(x, y) {
   const stack = [[x, y]];
   while (stack.length) {
     const [cx, cy] = stack.pop();
@@ -358,14 +348,13 @@ function toggleFlag(x, y) {
   const el = cellEl(x, y);
   el.textContent = c.flag ? '🚩' : ''; el.classList.toggle('flag', c.flag);
   setMineCounter();
-  recordMove(c.flag ? 'flag' : 'unflag', x, y);
 }
 
 function setMineCounter() {
   $('mineCount').textContent = String(Math.max(-99, state.mines - state.flags)).padStart(3, '0');
 }
 
-function boom(x, y) {
+function finishLoss(x, y) {
   state.over = true; state.win = false; clearInterval(state.timerId);
   $('smiley').textContent = '😵';
   for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) {
@@ -377,19 +366,16 @@ function boom(x, y) {
   setTimeout(handleLoss, 350);
 }
 
-function checkWin() {
-  const total = state.w * state.h;
-  if (state.revealed === total - state.mines) {
-    state.over = true; state.win = true; clearInterval(state.timerId);
-    $('smiley').textContent = '😎';
-    // auto-flag remaining mines
-    for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-      const c = state.grid[y][x];
-      if (c.mine && !c.flag) { c.flag = true; const el = cellEl(x, y); el.textContent = '🚩'; }
-    }
-    state.flags = state.mines; setMineCounter();
-    setTimeout(handleWin, 350);
+function finishWin() {
+  state.over = true; state.win = true; clearInterval(state.timerId);
+  $('smiley').textContent = '😎';
+  // auto-flag remaining mines
+  for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+    const c = state.grid[y][x];
+    if (c.mine && !c.flag) { c.flag = true; const el = cellEl(x, y); el.textContent = '🚩'; }
   }
+  state.flags = state.mines; setMineCounter();
+  setTimeout(handleWin, 350);
 }
 
 /* ============================================================
@@ -399,16 +385,10 @@ function handleWin() { submitSession(true); }
 function handleLoss() { submitSession(false); }
 
 /* Every session scores now -- win or loss. The server computes the real score
-   from the replay; the client just shows it and refreshes the board. */
+   from its own tracked reveals + timestamps; the client just shows it and
+   refreshes the board. There's no client-supplied timing or move data left to
+   trust or distrust -- see server/src/board.ts. */
 async function submitSession(won) {
-  // Submit the time derived from the recorded move timestamps -- NOT the display
-  // counter (state.time). The server validates timeSeconds against move.t with a
-  // 3s tolerance; a background-throttled setInterval drifts past that and gets the
-  // whole (winning) run rejected -> null score, off the leaderboard. move.t is the
-  // exact same clock the server checks, so this always agrees.
-  const lastMoveMs = state.moves.length ? Math.max(...state.moves.map(m => m.t)) : state.time * 1000;
-  const timeSeconds = Math.round(lastMoveMs / 1000);
-
   // Ensure a name lands on the leaderboard: prompt if the nickname field is empty.
   let handle = getHandle();
   if (!handle) {
@@ -416,9 +396,10 @@ async function submitSession(won) {
     if (handle) $('handle').value = handle;  // reflect in the field so modal/share use it
   }
 
-  // Unseeded fallback game -- can't submit; just show the local result.
-  if (!state.gameId || !state.seed || !state.seedSig) {
-    showResults({ won, timeSeconds, score: null, rank: null });
+  // Offline fallback game (server was unreachable, or every reveal failed) --
+  // never had a real gameId session, so there's nothing to submit.
+  if (!state.gameId || !state.online) {
+    showResults({ won, timeSeconds: state.time, score: null, rank: null });
     return;
   }
 
@@ -431,13 +412,8 @@ async function submitSession(won) {
     for (let attempt = 0; attempt < 5; attempt++) {
       result = await submitGame({
         gameId: state.gameId,
-        seed: state.seed,
-        seedSig: state.seedSig,
-        difficulty: state.dif,
-        moves: state.moves,
         handle: handle || undefined,
         nameKey,
-        timeSeconds,
         email: state.email || undefined,
       });
 
@@ -457,11 +433,11 @@ async function submitSession(won) {
     state.submitResult = result;
     if (result.claimToken) state.myToken = result.claimToken;  // highlight my row
     rememberPlayer(handle, state.email, result.score);         // keep best score for the name fold-out
-    showResults({ won: result.won, timeSeconds, score: result.score, rank: result.rank, onLeaderboard: result.onLeaderboard });
+    showResults({ won: result.won, timeSeconds: result.timeSeconds, score: result.score, rank: result.rank, onLeaderboard: result.onLeaderboard });
     if (result.onLeaderboard) loadLeaderboard();
   } else {
     // Network error -- still show the local win/loss so the player isn't left hanging.
-    showResults({ won, timeSeconds, score: null, rank: null });
+    showResults({ won, timeSeconds: state.time, score: null, rank: null });
   }
 }
 
@@ -595,7 +571,7 @@ board.addEventListener('click', async e => {
   // keyboard opens). It is NOT a move -- the board only reveals on the player's next
   // deliberate tap, once name + email are in.
   if (!state.identityOk) { await ensureIdentity(); return; }
-  if (state.flagMode) toggleFlag(x, y); else reveal(x, y);
+  if (state.flagMode) toggleFlag(x, y); else await reveal(x, y);
   if (!state.over) $('smiley').textContent = '🙂';
 });
 board.addEventListener('contextmenu', async e => {
