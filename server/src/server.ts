@@ -39,23 +39,31 @@ app.use(
   })
 );
 
-/* ---- Rate limiting: Redis incr + expire (100 scored submissions / IP / 10 min) ----
-   Counts only finalized, verified games (see the call site). It's per-IP, so a whole
-   office / launch-week WiFi shares one bucket -- keep the cap generous. */
-async function checkRateLimit(ip: string): Promise<boolean> {
+/* ---- Rate limiting: Redis incr + expire, per IP / 10 min ----
+   It's per-IP, so a whole office / launch-week WiFi shares one bucket -- keep
+   caps generous enough that real attendees never notice. */
+async function checkRateLimit(bucket: string, ip: string, limit: number): Promise<boolean> {
   const redis = getRedis();
-  const key = `ratelimit:submit:${ip}`;
+  const key = `ratelimit:${bucket}:${ip}`;
   const count = await redis.incr(key);
   if (count === 1) await redis.expire(key, 600);
-  return count <= 100;
+  return count <= limit;
 }
 
 function getIp(c: Context): string {
   return resolveClientIp(c.req.header("cf-connecting-ip"), c.req.header("x-forwarded-for"));
 }
 
-/* ---- POST /game/start ---- */
+/* ---- POST /game/start ----
+   Rate-limited per IP: with no cap here, a script could spin up unlimited
+   games and only ever submit the rare one that needed no guessing -- cherry-
+   picking a perfect run costs it nothing. /game/submit alone can't catch
+   that, since a discarded game is never submitted. */
 app.post("/game/start", async (c) => {
+  if (!(await checkRateLimit("start", getIp(c), 100))) {
+    return c.json({ error: "rate limit exceeded -- slow down!" }, 429);
+  }
+
   const body = await c.req.json().catch(() => ({})) as { difficulty?: string };
   const difficulty = body.difficulty as Difficulty;
 
@@ -155,7 +163,7 @@ app.post("/game/submit", async (c) => {
   // Rate limit here -- only count verified, name-settled games about to be scored.
   // Checking before verification let junk/tampered submits and the client's name-retry
   // loop burn the per-IP budget, locking out honest players on a shared launch-week IP.
-  if (!(await checkRateLimit(getIp(c)))) {
+  if (!(await checkRateLimit("submit", getIp(c), 100))) {
     return c.json({ error: "rate limit exceeded -- slow down!" }, 429);
   }
 
@@ -279,12 +287,8 @@ function tokenOk(provided: string | undefined): boolean {
 }
 
 // Throttle the admin endpoint so it can't be used as a free token-brute oracle.
-async function checkAdminRateLimit(ip: string): Promise<boolean> {
-  const redis = getRedis();
-  const key = `ratelimit:admin:${ip}`;
-  const count = await redis.incr(key);
-  if (count === 1) await redis.expire(key, 600);
-  return count <= 30;
+function checkAdminRateLimit(ip: string): Promise<boolean> {
+  return checkRateLimit("admin", ip, 30);
 }
 
 // Quote for CSV AND neutralise spreadsheet formula injection: a cell starting
