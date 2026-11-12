@@ -12,6 +12,7 @@ import { addScore, getLeaderboard as getLb } from "./leaderboard.js";
 import { storeClaim, getClaimStatus, executeClaim } from "./claim.js";
 import { reserveName } from "./names.js";
 import { resolveClientIp } from "./ip.js";
+import { ecsRoutes, ecsEmailRows } from "./ecs.js";
 
 const app = new Hono();
 
@@ -29,6 +30,9 @@ app.use(
     origin: (origin) => {
       if (!origin) return "*";
       if (origin === "https://minesweeper.metalbear.com") return origin;
+      // Waiting for ECS (/ecs/* routes) lives on metalbear.com, plus its Cloudflare Pages previews.
+      if (origin === "https://metalbear.com" || origin === "https://www.metalbear.com") return origin;
+      if (/^https:\/\/[a-z0-9-]+\.metalbear-com\.pages\.dev$/.test(origin)) return origin;
       // Allow any localhost origin in dev
       if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
       if (DEV_ORIGINS.includes(origin)) return origin;
@@ -335,6 +339,28 @@ app.get("/admin/emails.csv", async (c) => {
     "Cache-Control": "no-store",
   });
 });
+
+/* ---- GET /admin/ecs-emails.csv?key=<token> ----
+   Same guard as above, for the Waiting for ECS leaderboard (name,email,score). */
+app.get("/admin/ecs-emails.csv", async (c) => {
+  if (!ADMIN_TOKEN) return c.json({ error: "admin export disabled" }, 503);
+  if (!(await checkAdminRateLimit(getIp(c)))) return c.json({ error: "rate limit exceeded" }, 429);
+  const auth = c.req.header("authorization");
+  const headerToken = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
+  if (!tokenOk(c.req.query("key") ?? headerToken)) return c.json({ error: "forbidden" }, 403);
+
+  const rows = (await ecsEmailRows(getRedis())).map(([name, email, score]) =>
+    `${csvCell(name)},${csvCell(email)},${score ?? ""}`);
+  const csv = ["name,email,score", ...rows].join("\n") + "\n";
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="waiting-for-ecs-emails.csv"`,
+    "Cache-Control": "no-store",
+  });
+});
+
+/* ---- Waiting for ECS leaderboard (see ecs.ts) ---- */
+app.route("/ecs", ecsRoutes({ checkRateLimit, getIp, sanitiseHandle }));
 
 /* ---- Health check ---- */
 app.get("/health", c => c.json({ ok: true }));
